@@ -4,7 +4,7 @@ using EBooking.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddScoped<IEventsService, EventsService>();
+builder.Services.AddSingleton<IEventsService, EventsService>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>

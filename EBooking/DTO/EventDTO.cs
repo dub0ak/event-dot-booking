@@ -24,12 +24,12 @@ public class EventDto
     /// <summary>
     /// Дата и время начала
     /// </summary>
-    public DateTime StartAt { get; set; }
+    public DateTime? StartAt { get; set; }
 
     /// <summary>
     /// Дата и время окончания
     /// </summary>
-    public DateTime EndAt { get; set; }
+    public DateTime? EndAt { get; set; }
 }
 
 /// <summary>
@@ -68,6 +68,13 @@ public class CreateEventDto : IValidatableObject
     /// <returns></returns>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
+        var now = DateTime.Now;
+        if (EndAt <= now || StartAt <= now) {
+            yield return new ValidationResult(
+                "EndAt or StartAt must be in future",
+                [nameof(EndAt), nameof(StartAt)]
+            );
+        }
         if (EndAt <= StartAt)
         {
             yield return new ValidationResult(
@@ -114,8 +121,14 @@ public class UpdateEventDto : IValidatableObject
     /// <returns></returns>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        if (EndAt <= StartAt)
-        {
+        var now = DateTime.Now;
+        if (EndAt <= now || StartAt <= now) {
+            yield return new ValidationResult(
+                "EndAt or StartAt must be in future",
+                [nameof(EndAt), nameof(StartAt)]
+            );
+        }
+        if (EndAt <= StartAt) {
             yield return new ValidationResult(
                 "EndAt must be later than StartAt",
                 [nameof(EndAt), nameof(StartAt)]

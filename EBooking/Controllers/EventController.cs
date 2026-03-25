@@ -11,7 +11,7 @@ using System.Net;
 /// </summary>
 /// <param name="_eventsService"></param>
 [ApiController]
-[Route("api/[controller]")]
+[Route("[controller]")]
 public class EventsController(IEventsService _eventsService) : ControllerBase
 {
     /// <summary>
@@ -20,7 +20,7 @@ public class EventsController(IEventsService _eventsService) : ControllerBase
     /// <response code="200"></response> 
     [Produces("application/json")]
     [HttpGet]
-    public async Task<ActionResult<ApiResult<List<EventDto>>>> GetAllEvents()
+    public ActionResult<ApiResult<List<EventDto>>> GetAllEvents()
     {
         var events = _eventsService.GetAllEvents();
 
@@ -38,7 +38,7 @@ public class EventsController(IEventsService _eventsService) : ControllerBase
     /// <response code="200"></response> 
     [Produces("application/json")]
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<ApiBaseResult>> GetEventById(int id)
+    public ActionResult<ApiBaseResult> GetEventById(int id)
     {
         var event_to_return = _eventsService.GetEventById(id);
         if (event_to_return == null) {
@@ -61,7 +61,7 @@ public class EventsController(IEventsService _eventsService) : ControllerBase
     /// <response code="201"></response> 
     [Produces("application/json")]
     [HttpPost]
-    public async Task<ActionResult<ApiBaseResult>> CreateEvent([FromBody] CreateEventDto eventData)
+    public ActionResult<ApiBaseResult> CreateEvent([FromBody] CreateEventDto eventData)
     {
         var event_to_return = _eventsService.CreateEvent(eventData);
         return CreatedAtAction(
@@ -84,7 +84,7 @@ public class EventsController(IEventsService _eventsService) : ControllerBase
     /// <response code="200"></response> 
     [Produces("application/json")]
     [HttpPut("{id:int}")]
-    public async Task<ActionResult<ApiBaseResult>> UpdateEvent(int id, [FromBody] UpdateEventDto eventData)
+    public ActionResult<ApiBaseResult> UpdateEvent(int id, [FromBody] UpdateEventDto eventData)
     {
         var event_to_return = _eventsService.UpdateEvent(id, eventData);
         if (event_to_return != null) {
@@ -107,7 +107,7 @@ public class EventsController(IEventsService _eventsService) : ControllerBase
     /// <response code="204"></response> 
     [Produces("application/json")]
     [HttpDelete("{id:int}")]
-    public async Task<ActionResult<ApiBaseResult>> DeleteEvent(int id)
+    public ActionResult<ApiBaseResult> DeleteEvent(int id)
     {
         if (_eventsService.DeleteEvent(id)) {
             return NoContent();

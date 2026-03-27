@@ -11,7 +11,7 @@ public class EventsService : IEventsService
     /// <summary>
     /// Коллекция зарегистрированных мероприятий
     /// </summary>
-    private static readonly List<Event> Events = [];
+    private readonly List<Event> Events = [];
     private static int _nextId = 1;
 
     private static EventDto ToDto(Event eventItem)

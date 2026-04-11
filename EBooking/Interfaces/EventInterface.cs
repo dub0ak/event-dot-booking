@@ -9,12 +9,12 @@ public interface IEventsService
     /// <summary>
     /// Получить все зарегистрированные мероприятия
     /// </summary>
-    List<EventDto> GetAllEvents();
+    PaginatedResult<EventDto> GetEvents(GetEventsQueryDto query);
     /// <summary>
     /// Получить мероприятие по Id
     /// </summary>
     /// <param name="id">Идентификатор мероприятия</param>
-    EventDto? GetEventById(int id);
+    EventDto GetEventById(int id);
     /// <summary>
     /// Зарегистрировать новое мероприятие
     /// </summary>
@@ -25,10 +25,10 @@ public interface IEventsService
     /// </summary>
     /// <param name="id">Идентификатор мероприятия</param>
     /// <param name="eventData">Данные обновления</param>
-    EventDto? UpdateEvent(int id, UpdateEventDto eventData);
+    EventDto UpdateEvent(int id, UpdateEventDto eventData);
     /// <summary>
     /// Удалить мероприятие по идентификатору
     /// </summary>
     /// <param name="id">Идентификатор мероприятия</param>
-    bool DeleteEvent(int id);
+    void DeleteEvent(int id);
 }

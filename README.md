@@ -4,7 +4,7 @@
 
 EBooking — REST API-сервис для управления мероприятиями, реализованный на ASP.NET Core Web API.
 
-Проект представляет собой базовый каркас backend-приложения с CRUD-операциями.
+Проект представляет собой каркас backend-приложения с CRUD-операциями.
 
 ---
 
@@ -17,30 +17,40 @@ EBooking — REST API-сервис для управления мероприя�
 * Удаление мероприятия
 * Валидация входных данных
 * Swagger UI для тестирования API
+* Глобальная обработка ошибок через middleware
+* Фильтрация мероприятий по названию и датам
+* Пагинация результатов
+* Unit-тесты для бизнес-логики сервиса
 
 ---
 
 ## Технологии
 
 * C#
-* .NET 8 / .NET 9
+* .NET 8+
 * ASP.NET Core Web API
 * Swagger (Swashbuckle)
 * Dependency Injection (DI)
-
+* xUnit
 ---
 
 ## Структура проекта
 
 ```
 EBooking/
-│
-├── Controllers/      # HTTP-эндпоинты
-├── Services/         # Бизнес-логика
-├── Interfaces/       # Интерфейсы сервисов
-├── Models/           # Доменная модель
-├── Handlers/         # Формат API-ответов
-└── Program.cs        # Конфигурация приложения
+├── Controllers/     # Контроллеры API
+├── DTO/             # DTO для запросов и ответов
+├── Exceptions/      # Пользовательские исключения
+├── Handlers/        # Модели ответов и ошибок
+├── Interfaces/      # Интерфейсы сервисов
+├── Middleware/      # Глобальный middleware обработки ошибок
+├── Models/          # Доменные модели
+├── Services/        # Бизнес-логика
+├── Program.cs       # Конфигурация приложения
+└── README.md
+
+EBooking.Tests/
+└── EventsServiceTests.cs  # Unit-тесты для сервиса
 ```
 
 ---
@@ -51,7 +61,7 @@ EBooking/
 
 ```bash
 git clone <repo_url>
-cd EBooking
+cd event-dot-booking
 ```
 
 ### 2. Сборка проекта
@@ -63,7 +73,7 @@ dotnet build
 ### 3. Запуск
 
 ```bash
-dotnet run
+dotnet run --project EBooking
 ```
 
 ---
@@ -76,6 +86,14 @@ dotnet run
 http://localhost:5000/swagger
 ```
 
+## Tests
+
+Для запуска unit-тестов выполните команду:
+
+```
+dotnet test
+```
+
 ---
 
 ## API эндпоинты
@@ -83,7 +101,50 @@ http://localhost:5000/swagger
 ### 🔹 Получить все события
 
 ```
-GET /api/events
+GET /events
+```
+
+Поддерживаемые query-параметры:
+
+* title — поиск по названию, частичное совпадение, без учёта регистра;
+* from — вернуть события, начинающиеся не раньше указанной даты;
+* to — вернуть события, заканчивающиеся не позже указанной даты;
+* page — номер страницы, по умолчанию 1;
+* pageSize — размер страницы, по умолчанию 10.
+
+```
+GET /api/events?title=asp.net&from=2026-04-01T00:00:00&to=2026-04-30T23:59:59&page=1&pageSize=5
+```
+
+Пример ответа:
+
+```json
+{
+  "status": true,
+  "dateTime": "2026-04-11T10:30:00Z",
+  "message": "Events returned successfully",
+  "data": {
+    "totalCount": 2,
+    "page": 1,
+    "pageSize": 5,
+    "items": [
+      {
+        "id": 1,
+        "title": "ASP.NET Basic",
+        "description": "Introduction to ASP.NET Core",
+        "startAt": "2026-04-10T10:00:00",
+        "endAt": "2026-04-10T12:00:00"
+      },
+      {
+        "id": 2,
+        "title": "ASP.NET Advanced",
+        "description": "Advanced topics",
+        "startAt": "2026-04-20T10:00:00",
+        "endAt": "2026-04-20T12:00:00"
+      }
+    ]
+  }
+}
 ```
 
 ---
@@ -91,7 +152,7 @@ GET /api/events
 ### 🔹 Получить событие по ID
 
 ```
-GET /api/events/{id}
+GET /events/{id}
 ```
 
 **Ответ:**
@@ -104,7 +165,7 @@ GET /api/events/{id}
 ### 🔹 Создать событие
 
 ```
-POST /api/events
+POST /events
 ```
 
 **Body:**
@@ -128,7 +189,7 @@ POST /api/events
 ### 🔹 Обновить событие
 
 ```
-PUT /api/events/{id}
+PUT /events/{id}
 ```
 
 ---
@@ -136,17 +197,8 @@ PUT /api/events/{id}
 ### 🔹 Удалить событие
 
 ```
-DELETE /api/events/{id}
+DELETE /events/{id}
 ```
-
----
-
-## Особенности
-
-* Данные хранятся в памяти (`List<Event>`)
-* Бизнес-логика вынесена в сервис (`EventsService`)
-* Используется Dependency Injection
-* Единый формат ответа API (`ApiResult`)
 
 ---
 

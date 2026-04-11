@@ -1,120 +1,123 @@
+using EBooking.DTO;
+using EBooking.Handlers;
+using EBooking.Interfaces;
+using Microsoft.AspNetCore.Mvc;
+
 namespace EBooking.Controllers;
 
-using EBooking.DTO;
-using EBooking.Interfaces;
-using EBooking.Handlers;
-using Microsoft.AspNetCore.Mvc;
-using System.Net;
-
 /// <summary>
-/// Контроллер CRUD-операций для Event-модели
+/// Контроллер для работы с мероприятиями
 /// </summary>
-/// <param name="_eventsService"></param>
 [ApiController]
-[Route("[controller]")]
-public class EventsController(IEventsService _eventsService) : ControllerBase
+[Route("api/[controller]")]
+public class EventsController(IEventsService eventsService) : ControllerBase
 {
-    /// <summary>
-    /// Получить список всех зарегистрированных мероприятий
-    /// </summary>
-    /// <response code="200"></response> 
-    [Produces("application/json")]
-    [HttpGet]
-    public ActionResult<ApiResult<List<EventDto>>> GetAllEvents()
-    {
-        var events = _eventsService.GetAllEvents();
+    private readonly IEventsService _eventsService = eventsService;
 
-        return Ok(new ApiResult<List<EventDto>> {
-            Data = events,
+    /// <summary>
+    /// Получить список мероприятий с фильтрацией и пагинацией
+    /// </summary>
+    /// <param name="query">Параметры фильтрации и пагинации</param>
+    /// <returns>Список мероприятий</returns>
+    [HttpGet]
+    [Produces("application/json")]
+    [ProducesResponseType(typeof(ApiResult<PaginatedResult<EventDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    public ActionResult<ApiResult<PaginatedResult<EventDto>>> GetEvents([FromQuery] GetEventsQueryDto query)
+    {
+        var result = _eventsService.GetEvents(query);
+
+        return Ok(new ApiResult<PaginatedResult<EventDto>>
+        {
             Status = true,
-            Message = "All events returned successfully"
+            Message = "Events returned successfully",
+            Data = result
         });
     }
 
     /// <summary>
-    /// Получить мероприятие по Id
+    /// Получить мероприятие по идентификатору
     /// </summary>
     /// <param name="id">Идентификатор мероприятия</param>
-    /// <response code="200"></response> 
-    [Produces("application/json")]
+    /// <returns>Найденное мероприятие</returns>
     [HttpGet("{id:int}")]
-    public ActionResult<ApiBaseResult> GetEventById(int id)
+    [Produces("application/json")]
+    [ProducesResponseType(typeof(ApiResult<EventDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    public ActionResult<ApiResult<EventDto>> GetEventById(int id)
     {
-        var event_to_return = _eventsService.GetEventById(id);
-        if (event_to_return == null) {
-            return NotFound(new ApiResult {
-                Status = false,
-                Message = $"Error: Unable to find event with Id = {id}"
-            });
-        }
-        return Ok(new ApiResult<EventDto> {
-            Data = event_to_return,
+        var eventToReturn = _eventsService.GetEventById(id);
+
+        return Ok(new ApiResult<EventDto>
+        {
             Status = true,
-            Message = $"Event with Id = {id}"
+            Message = $"Event with Id = {id} returned successfully",
+            Data = eventToReturn
         });
     }
 
     /// <summary>
-    /// Зарегистрировать новое мероприятие
+    /// Создать новое мероприятие
     /// </summary>
-    /// <param name="eventData">Данные для регистрации</param>
-    /// <response code="201"></response> 
-    [Produces("application/json")]
+    /// <param name="eventData">Данные нового мероприятия</param>
+    /// <returns>Созданное мероприятие</returns>
     [HttpPost]
-    public ActionResult<ApiBaseResult> CreateEvent([FromBody] CreateEventDto eventData)
+    [Produces("application/json")]
+    [ProducesResponseType(typeof(ApiResult<EventDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    public ActionResult<ApiResult<EventDto>> CreateEvent([FromBody] CreateEventDto eventData)
     {
-        var event_to_return = _eventsService.CreateEvent(eventData);
+        var createdEvent = _eventsService.CreateEvent(eventData);
+
         return CreatedAtAction(
             nameof(GetEventById),
-            new {id = event_to_return.Id},
+            new { id = createdEvent.Id },
             new ApiResult<EventDto>
             {
-                Data = event_to_return,
                 Status = true,
-                Message = "New event created successfully"
-            }
-        );
-    }
-
-    /// <summary>
-    /// Обновить информацию о мероприятии
-    /// </summary>
-    /// <param name="id">Идентификатор мероприятия</param>
-    /// <param name="eventData">Данные обновления</param>
-    /// <response code="200"></response> 
-    [Produces("application/json")]
-    [HttpPut("{id:int}")]
-    public ActionResult<ApiBaseResult> UpdateEvent(int id, [FromBody] UpdateEventDto eventData)
-    {
-        var event_to_return = _eventsService.UpdateEvent(id, eventData);
-        if (event_to_return != null) {
-            return Ok(new ApiResult<EventDto> {
-                Data = event_to_return,
-                Status = true,
-                Message = $"Event with Id = {id} updated"
+                Message = "Event created successfully",
+                Data = createdEvent
             });
-        }
-        return NotFound(new ApiResult {
-            Status = false,
-            Message = $"Error: Unable to update event with Id = {id}"
+    }
+
+    /// <summary>
+    /// Обновить существующее мероприятие
+    /// </summary>
+    /// <param name="id">Идентификатор мероприятия</param>
+    /// <param name="eventData">Новые данные мероприятия</param>
+    /// <returns>Обновлённое мероприятие</returns>
+    [HttpPut("{id:int}")]
+    [Produces("application/json")]
+    [ProducesResponseType(typeof(ApiResult<EventDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    public ActionResult<ApiResult<EventDto>> UpdateEvent(int id, [FromBody] UpdateEventDto eventData)
+    {
+        var updatedEvent = _eventsService.UpdateEvent(id, eventData);
+
+        return Ok(new ApiResult<EventDto>
+        {
+            Status = true,
+            Message = $"Event with Id = {id} updated successfully",
+            Data = updatedEvent
         });
     }
 
     /// <summary>
-    /// Удалить мероприятие по идентификатору
+    /// Удалить мероприятие
     /// </summary>
     /// <param name="id">Идентификатор мероприятия</param>
-    /// <response code="204"></response> 
-    [Produces("application/json")]
     [HttpDelete("{id:int}")]
-    public ActionResult<ApiBaseResult> DeleteEvent(int id)
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    public IActionResult DeleteEvent(int id)
     {
-        if (_eventsService.DeleteEvent(id)) {
-            return NoContent();
-        }
-        return NotFound(new ApiResult {
-            Status = false,
-            Message = $"Error: Unable to delete event with Id = {id}"
-        });
+        _eventsService.DeleteEvent(id);
+        return NoContent();
     }
 }

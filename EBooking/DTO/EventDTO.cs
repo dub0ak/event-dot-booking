@@ -24,12 +24,12 @@ public class EventDto
     /// <summary>
     /// Дата и время начала
     /// </summary>
-    public DateTime? StartAt { get; set; }
+    public DateTime StartAt { get; set; }
 
     /// <summary>
     /// Дата и время окончания
     /// </summary>
-    public DateTime? EndAt { get; set; }
+    public DateTime EndAt { get; set; }
 }
 
 /// <summary>
@@ -68,13 +68,6 @@ public class CreateEventDto : IValidatableObject
     /// <returns></returns>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        var now = DateTime.Now;
-        if (EndAt <= now || StartAt <= now) {
-            yield return new ValidationResult(
-                "EndAt or StartAt must be in future",
-                [nameof(EndAt), nameof(StartAt)]
-            );
-        }
         if (EndAt <= StartAt)
         {
             yield return new ValidationResult(
@@ -121,13 +114,6 @@ public class UpdateEventDto : IValidatableObject
     /// <returns></returns>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        var now = DateTime.Now;
-        if (EndAt <= now || StartAt <= now) {
-            yield return new ValidationResult(
-                "EndAt or StartAt must be in future",
-                [nameof(EndAt), nameof(StartAt)]
-            );
-        }
         if (EndAt <= StartAt) {
             yield return new ValidationResult(
                 "EndAt must be later than StartAt",
@@ -135,4 +121,22 @@ public class UpdateEventDto : IValidatableObject
             );
         }
     }
+}
+
+public class GetEventsQueryDto
+{
+    public string? Title { get; set; }
+    public DateTime? From { get; set; }
+    public DateTime? To { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 10;
+}
+
+
+public class PaginatedResult<T>
+{
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public List<T> Items { get; set; } = [];
 }

@@ -23,10 +23,10 @@ public class Event
     /// <summary>
     /// Дата и время начала мероприятия
     /// </summary>
-    public DateTime? StartAt { get; set; }
+    public DateTime StartAt { get; set; }
 
     /// <summary>
     /// Дата и время окончания мероприятия
     /// </summary>
-    public DateTime? EndAt { get; set; }
+    public DateTime EndAt { get; set; }
 }

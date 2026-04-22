@@ -8,7 +8,7 @@ public class Event
     /// <summary>
     /// Уникальный идентификатор мероприятия
     /// </summary>
-    public int Id { get; set; }
+    public Guid Id { get; set; }
 
     /// <summary>
     /// Название мероприятия

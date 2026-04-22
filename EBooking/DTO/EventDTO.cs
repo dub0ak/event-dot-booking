@@ -9,7 +9,7 @@ public class EventDto
     /// <summary>
     /// Идентификатор мероприятия
     /// </summary>
-    public int Id { get; set; }
+    public Guid Id { get; set; }
 
     /// <summary>
     /// Название мероприятия

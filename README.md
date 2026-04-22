@@ -10,17 +10,29 @@ EBooking — REST API-сервис для управления мероприя�
 
 ## Возможности
 
-* Создание мероприятий
-* Получение списка мероприятий
-* Получение мероприятия по ID
-* Обновление мероприятия
-* Удаление мероприятия
-* Валидация входных данных
-* Swagger UI для тестирования API
-* Глобальная обработка ошибок через middleware
-* Фильтрация мероприятий по названию и датам
-* Пагинация результатов
-* Unit-тесты для бизнес-логики сервиса
+### Работа с мероприятиями
+
+- Создание мероприятий
+- Получение списка мероприятий
+- Получение мероприятия по ID
+- Обновление мероприятия
+- Удаление мероприятия
+- Фильтрация по названию и датам
+- Пагинация
+
+### Работа с бронированиями
+
+- Создание брони (202 Accepted)
+- Получение статуса брони
+- Асинхронная обработка бронирований
+- Фоновый сервис обработки
+
+### Общее
+
+- Валидация входных данных
+- Swagger UI
+- Глобальная обработка ошибок
+- Unit-тесты бизнес-логики
 
 ---
 
@@ -31,26 +43,33 @@ EBooking — REST API-сервис для управления мероприя�
 * ASP.NET Core Web API
 * Swagger (Swashbuckle)
 * Dependency Injection (DI)
+* BackgroundService
 * xUnit
+
+
 ---
 
 ## Структура проекта
 
 ```
 EBooking/
-├── Controllers/     # Контроллеры API
-├── DTO/             # DTO для запросов и ответов
-├── Exceptions/      # Пользовательские исключения
-├── Handlers/        # Модели ответов и ошибок
-├── Interfaces/      # Интерфейсы сервисов
-├── Middleware/      # Глобальный middleware обработки ошибок
-├── Models/          # Доменные модели
-├── Services/        # Бизнес-логика
-├── Program.cs       # Конфигурация приложения
-└── README.md
+├── Controllers/
+├── DTO/
+├── Exceptions/
+├── Handlers/
+├── Interfaces/
+├── Middleware/
+├── Models/
+├── Services/
+├── DataStore/
+├── BackgroundServices/
+├── Program.cs
 
 EBooking.Tests/
-└── EventsServiceTests.cs  # Unit-тесты для сервиса
+├── EventsServiceTests.cs
+└── BookingServiceTests.cs
+
+README.md 
 ```
 
 ---
@@ -199,6 +218,43 @@ PUT /events/{id}
 ```
 DELETE /events/{id}
 ```
+
+### 🔹 Создать бронь
+
+```
+POST /events/{id}/book
+```
+
+Возвращает 202 Accepted. Обработка выполняется асинхронно
+В заголовке Location возвращается ссылка на бронь
+Ответ
+{
+  "status": true,
+  "message": "Booking created successfully",
+  "data": {
+    "id": "guid",
+    "eventId": "guid",
+    "status": "Pending",
+    "createdAt": "2026-04-10T10:00:00Z",
+    "processedAt": null
+  }
+}
+
+
+### 🔹 Получить бронь
+
+```
+GET /bookings/{id}
+```
+
+## Фоновая обработка
+
+В проекте реализован BackgroundService, который:
+
+* Периодически ищет брони со статусом `Pending`
+* Имитирует обращение к внешней системе (`Task.Delay`)
+* Переводит бронь в `Confirmed`
+* Заполняет поле `ProcessedAt`
 
 ---
 

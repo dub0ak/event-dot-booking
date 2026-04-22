@@ -1,18 +1,19 @@
+namespace EBooking.Controllers;
+
 using EBooking.DTO;
 using EBooking.Handlers;
 using EBooking.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EBooking.Controllers;
-
 /// <summary>
 /// Контроллер для работы с мероприятиями
 /// </summary>
 [ApiController]
-[Route("api/[controller]")]
-public class EventsController(IEventsService eventsService) : ControllerBase
+[Route("[controller]")]
+public class EventsController(IEventsService eventsService, IBookingService bookingService) : ControllerBase
 {
     private readonly IEventsService _eventsService = eventsService;
+    private readonly IBookingService _bookingService = bookingService;
 
     /// <summary>
     /// Получить список мероприятий с фильтрацией и пагинацией
@@ -41,12 +42,12 @@ public class EventsController(IEventsService eventsService) : ControllerBase
     /// </summary>
     /// <param name="id">Идентификатор мероприятия</param>
     /// <returns>Найденное мероприятие</returns>
-    [HttpGet("{id:int}")]
+    [HttpGet("{id:guid}")]
     [Produces("application/json")]
     [ProducesResponseType(typeof(ApiResult<EventDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public ActionResult<ApiResult<EventDto>> GetEventById(int id)
+    public ActionResult<ApiResult<EventDto>> GetEventById(Guid id)
     {
         var eventToReturn = _eventsService.GetEventById(id);
 
@@ -89,13 +90,13 @@ public class EventsController(IEventsService eventsService) : ControllerBase
     /// <param name="id">Идентификатор мероприятия</param>
     /// <param name="eventData">Новые данные мероприятия</param>
     /// <returns>Обновлённое мероприятие</returns>
-    [HttpPut("{id:int}")]
+    [HttpPut("{id:guid}")]
     [Produces("application/json")]
     [ProducesResponseType(typeof(ApiResult<EventDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public ActionResult<ApiResult<EventDto>> UpdateEvent(int id, [FromBody] UpdateEventDto eventData)
+    public ActionResult<ApiResult<EventDto>> UpdateEvent(Guid id, [FromBody] UpdateEventDto eventData)
     {
         var updatedEvent = _eventsService.UpdateEvent(id, eventData);
 
@@ -111,13 +112,37 @@ public class EventsController(IEventsService eventsService) : ControllerBase
     /// Удалить мероприятие
     /// </summary>
     /// <param name="id">Идентификатор мероприятия</param>
-    [HttpDelete("{id:int}")]
+    [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public IActionResult DeleteEvent(int id)
+    public IActionResult DeleteEvent(Guid id)
     {
         _eventsService.DeleteEvent(id);
         return NoContent();
+    }
+
+    /// <summary>
+    /// Создать бронь для мероприятия
+    /// </summary>
+    /// <param name="id">Идентификатор мероприятия</param>
+    /// <returns>Созданная бронь</returns>
+    [HttpPost("{id:guid}/book")]
+    [Produces("application/json")]
+    [ProducesResponseType(typeof(ApiResult<BookingDto>), StatusCodes.Status202Accepted)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<ApiResult<BookingDto>>> CreateBooking(Guid id)
+    {
+        var booking = await _bookingService.CreateBookingAsync(id);
+
+        return Accepted(
+            $"/bookings/{booking.Id}",
+            new ApiResult<BookingDto>
+            {
+                Status = true,
+                Message = $"Booking for event with Id = {id} created successfully",
+                Data = booking
+            });
     }
 }

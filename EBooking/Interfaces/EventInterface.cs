@@ -1,4 +1,5 @@
 namespace EBooking.Interfaces;
+
 using EBooking.DTO;
 
 /// <summary>
@@ -14,7 +15,7 @@ public interface IEventsService
     /// Получить мероприятие по Id
     /// </summary>
     /// <param name="id">Идентификатор мероприятия</param>
-    EventDto GetEventById(int id);
+    EventDto GetEventById(Guid id);
     /// <summary>
     /// Зарегистрировать новое мероприятие
     /// </summary>
@@ -25,10 +26,10 @@ public interface IEventsService
     /// </summary>
     /// <param name="id">Идентификатор мероприятия</param>
     /// <param name="eventData">Данные обновления</param>
-    EventDto UpdateEvent(int id, UpdateEventDto eventData);
+    EventDto UpdateEvent(Guid id, UpdateEventDto eventData);
     /// <summary>
     /// Удалить мероприятие по идентификатору
     /// </summary>
     /// <param name="id">Идентификатор мероприятия</param>
-    void DeleteEvent(int id);
+    void DeleteEvent(Guid id);
 }

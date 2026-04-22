@@ -3,12 +3,17 @@ using EBooking.Handlers;
 using EBooking.Interfaces;
 using EBooking.Middleware;
 using EBooking.Services;
+using EBooking.DataStore;
+using EBooking.BackgroundServices;
 using Microsoft.AspNetCore.Mvc;
 
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSingleton<IEventsService, EventsService>();
+builder.Services.AddSingleton<BookingStore>();
+builder.Services.AddSingleton<IBookingService, BookingService>();
+builder.Services.AddHostedService<BookingProcessingBackgroundService>();
 builder.Services.AddControllers();
 
 builder.Services.Configure<ApiBehaviorOptions>(options =>

@@ -1,8 +1,9 @@
+namespace EBooking.Tests;
+
 using EBooking.DTO;
 using EBooking.Exceptions;
 using EBooking.Services;
 
-namespace EBooking.Tests;
 
 public class EventsServiceTests
 {
@@ -50,7 +51,7 @@ public class EventsServiceTests
         var result = service.CreateEvent(dto);
 
         Assert.NotNull(result);
-        Assert.True(result.Id > 0);
+        Assert.NotEqual(Guid.Empty, result.Id);
         Assert.Equal(dto.Title, result.Title);
         Assert.Equal(dto.Description, result.Description);
         Assert.Equal(dto.StartAt, result.StartAt);
@@ -93,10 +94,10 @@ public class EventsServiceTests
     {
         var service = CreateService();
 
-        var action = () => service.GetEventById(999999);
-
+        var missingId = Guid.NewGuid();
+        var action = () => service.GetEventById(missingId);
         var exception = Assert.Throws<NotFoundException>(action);
-        Assert.Contains("999999", exception.Message);
+        Assert.Contains(missingId.ToString(), exception.Message);
     }
 
     [Fact]
@@ -127,10 +128,10 @@ public class EventsServiceTests
         var service = CreateService();
         var updateDto = CreateValidUpdateDto();
 
-        var action = () => service.UpdateEvent(999999, updateDto);
-
+        var missingId = Guid.NewGuid();
+        var action = () => service.UpdateEvent(missingId, updateDto);
         var exception = Assert.Throws<NotFoundException>(action);
-        Assert.Contains("999999", exception.Message);
+        Assert.Contains(missingId.ToString(), exception.Message);
     }
 
     [Fact]
@@ -151,10 +152,10 @@ public class EventsServiceTests
     {
         var service = CreateService();
 
-        var action = () => service.DeleteEvent(999999);
-
+        var missingId = Guid.NewGuid();
+        var action = () => service.DeleteEvent(missingId);
         var exception = Assert.Throws<NotFoundException>(action);
-        Assert.Contains("999999", exception.Message);
+        Assert.Contains(missingId.ToString(), exception.Message);
     }
 
     [Fact]

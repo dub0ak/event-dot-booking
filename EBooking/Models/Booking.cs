@@ -51,4 +51,17 @@ public class Booking
         Status = BookingStatus.Rejected;
         ProcessedAt = DateTime.UtcNow;
     }
+
+    public bool TryConfirm()
+    {
+        if (Status != BookingStatus.Pending)
+        {
+            return false;
+        }
+
+        Status = BookingStatus.Confirmed;
+        ProcessedAt = DateTime.UtcNow;
+
+        return true;
+    }
 }

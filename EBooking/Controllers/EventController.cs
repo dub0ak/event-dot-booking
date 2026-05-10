@@ -135,14 +135,19 @@ public class EventsController(IEventsService eventsService, IBookingService book
     public async Task<ActionResult<ApiResult<BookingDto>>> CreateBooking(Guid id)
     {
         var booking = await _bookingService.CreateBookingAsync(id);
-
         return Accepted(
-            $"/bookings/{booking.Id}",
+            Url.Action(
+                nameof(BookingsController.GetBookingById),
+                "Bookings",
+                new { id = booking.Id },
+                Request.Scheme
+            ),
             new ApiResult<BookingDto>
             {
                 Status = true,
                 Message = $"Booking for event with Id = {id} created successfully",
                 Data = booking
-            });
+            }
+        );
     }
 }

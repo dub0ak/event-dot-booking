@@ -34,8 +34,6 @@ public class BookingProcessingBackgroundService : BackgroundService
                         break;
                     }
 
-                    // Дополнительная защита от повторной обработки,
-                    // если статус уже успел измениться
                     if (booking.Status != BookingStatus.Pending)
                     {
                         continue;
@@ -48,10 +46,8 @@ public class BookingProcessingBackgroundService : BackgroundService
 
                     await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
 
-                    if (booking.Status == BookingStatus.Pending)
+                    if (booking.TryConfirm())
                     {
-                        booking.Confirm();
-
                         _logger.LogInformation(
                             "Booking {BookingId} confirmed at {ProcessedAt}",
                             booking.Id,

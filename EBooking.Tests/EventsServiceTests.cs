@@ -3,13 +3,14 @@ namespace EBooking.Tests;
 using EBooking.DTO;
 using EBooking.Exceptions;
 using EBooking.Services;
+using EBooking.DataStore;
 
 
 public class EventsServiceTests
 {
     private static EventsService CreateService()
     {
-        return new EventsService();
+        return new EventsService(new EventStore());
     }
 
     private static CreateEventDto CreateValidCreateDto(
@@ -23,7 +24,8 @@ public class EventsServiceTests
             Title = title,
             Description = description,
             StartAt = startAt ?? new DateTime(2026, 4, 10, 10, 0, 0),
-            EndAt = endAt ?? new DateTime(2026, 4, 10, 12, 0, 0)
+            EndAt = endAt ?? new DateTime(2026, 4, 10, 12, 0, 0),
+            TotalSeats = 10
         };
     }
 

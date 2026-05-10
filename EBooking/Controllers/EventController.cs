@@ -66,8 +66,9 @@ public class EventsController(IEventsService eventsService, IBookingService book
     /// <returns>Созданное мероприятие</returns>
     [HttpPost]
     [Produces("application/json")]
-    [ProducesResponseType(typeof(ApiResult<EventDto>), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResult<BookingDto>), StatusCodes.Status202Accepted)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
     public ActionResult<ApiResult<EventDto>> CreateEvent([FromBody] CreateEventDto eventData)
     {

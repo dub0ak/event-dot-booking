@@ -9,22 +9,38 @@ using EBooking.Models;
 public class BookingService : IBookingService
 {
     private readonly BookingStore _bookingStore;
-    private readonly IEventsService _eventsService;
+    private readonly EventStore _eventStore;
+    private readonly object _bookingLock = new();
 
-    public BookingService(BookingStore bookingStore, IEventsService eventsService)
+    public BookingService(BookingStore bookingStore, EventStore eventStore)
     {
         _bookingStore = bookingStore;
-        _eventsService = eventsService;
+        _eventStore = eventStore;
     }
 
     public Task<BookingDto> CreateBookingAsync(Guid eventId)
     {
-        _eventsService.GetEventById(eventId);
+        lock (_bookingLock)
+        {
+            var eventItem = _eventStore.GetById(eventId);
 
-        var booking = Booking.CreatePending(eventId);
-        _bookingStore.Add(booking);
+            if (eventItem is null)
+            {
+                throw new NotFoundException($"Event with Id = {eventId} was not found");
+            }
 
-        return Task.FromResult(ToDto(booking));
+            if (!eventItem.TryReserveSeats())
+            {
+                throw new NoAvailableSeatsException("No available seats for this event");
+            }
+
+            _eventStore.Update(eventItem);
+
+            var booking = Booking.CreatePending(eventId);
+            _bookingStore.Add(booking);
+
+            return Task.FromResult(ToDto(booking));
+        }
     }
 
     public Task<BookingDto> GetBookingByIdAsync(Guid bookingId)

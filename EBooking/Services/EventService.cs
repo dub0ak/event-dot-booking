@@ -1,9 +1,10 @@
+namespace EBooking.Services;
+
 using EBooking.DTO;
 using EBooking.Exceptions;
 using EBooking.Interfaces;
 using EBooking.Models;
 
-namespace EBooking.Services;
 
 /// <summary>
 /// Сервис для работы с мероприятиями
@@ -11,7 +12,6 @@ namespace EBooking.Services;
 public class EventsService : IEventsService
 {
     private readonly List<Event> _events = [];
-    private int _nextId = 1;
     /// <summary>
     /// Получить список мероприятий с фильтрацией и пагинацией
     /// </summary>
@@ -69,7 +69,7 @@ public class EventsService : IEventsService
     /// <exception cref="NotFoundException">
     /// Выбрасывается, если мероприятие не найдено
     /// </exception>
-    public EventDto GetEventById(int id)
+    public EventDto GetEventById(Guid id)
     {
         var eventItem = _events.FirstOrDefault(e => e.Id == id);
         if (eventItem is null)
@@ -92,7 +92,7 @@ public class EventsService : IEventsService
         ValidateEventDates(eventData.StartAt, eventData.EndAt);
         var newEvent = new Event
         {
-            Id = _nextId++,
+            Id = Guid.NewGuid(),
             Title = eventData.Title,
             Description = eventData.Description,
             StartAt = eventData.StartAt,
@@ -114,7 +114,7 @@ public class EventsService : IEventsService
     /// <exception cref="ValidationException">
     /// Выбрасывается, если дата окончания раньше или равна дате начала
     /// </exception>
-    public EventDto UpdateEvent(int id, UpdateEventDto eventData)
+    public EventDto UpdateEvent(Guid id, UpdateEventDto eventData)
     {
         ValidateEventDates(eventData.StartAt, eventData.EndAt);
         var eventToUpdate = _events.FirstOrDefault(e => e.Id == id);
@@ -136,7 +136,7 @@ public class EventsService : IEventsService
     /// <exception cref="NotFoundException">
     /// Выбрасывается, если мероприятие не найдено
     /// </exception>
-    public void DeleteEvent(int id)
+    public void DeleteEvent(Guid id)
     {
         var eventToRemove = _events.FirstOrDefault(e => e.Id == id);
         if (eventToRemove is null)

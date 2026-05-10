@@ -1,4 +1,5 @@
 namespace EBooking.Middleware;
+
 using System.Text.Json;
 using EBooking.Exceptions;
 using EBooking.Handlers;

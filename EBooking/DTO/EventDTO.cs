@@ -30,6 +30,16 @@ public class EventDto
     /// Дата и время окончания
     /// </summary>
     public DateTime EndAt { get; set; }
+
+    /// <summary>
+    /// Общее количество мест на мероприятии
+    /// </summary>
+    public int TotalSeats { get; set; }
+
+    /// <summary>
+    /// Текущее количество свободных мест
+    /// </summary>
+    public int AvailableSeats { get; set; }
 }
 
 /// <summary>
@@ -62,6 +72,13 @@ public class CreateEventDto : IValidatableObject
     public DateTime EndAt { get; set; }
 
     /// <summary>
+    /// Общее количество мест на мероприятии
+    /// </summary>
+    [Required(ErrorMessage = "TotalSeats required")]
+    [Range(1, int.MaxValue, ErrorMessage = "TotalSeats must be greater than 0")]
+    public int? TotalSeats { get; set; }
+
+    /// <summary>
     /// Валидатор даты
     /// </summary>
     /// <param name="validationContext"></param>
@@ -73,6 +90,13 @@ public class CreateEventDto : IValidatableObject
             yield return new ValidationResult(
                 "EndAt must be later than StartAt",
                 [nameof(EndAt), nameof(StartAt)]
+            );
+        }
+        if (!TotalSeats.HasValue || TotalSeats.Value <= 0)
+        {
+            yield return new ValidationResult(
+                "TotalSeats must be greater than 0",
+                [nameof(TotalSeats)]
             );
         }
     }

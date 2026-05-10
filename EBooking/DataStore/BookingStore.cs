@@ -16,6 +16,21 @@ public class BookingStore
         }
     }
 
+    public void Update(Booking booking)
+    {
+        lock (_sync)
+        {
+            var index = _bookings.FindIndex(b => b.Id == booking.Id);
+
+            if (index == -1)
+            {
+                return;
+            }
+
+            _bookings[index] = booking;
+        }
+    }
+
     public Booking? GetById(Guid id)
     {
         lock (_sync)

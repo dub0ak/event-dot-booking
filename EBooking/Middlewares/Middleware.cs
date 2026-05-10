@@ -31,6 +31,11 @@ public class ExceptionHandlingMiddleware
             _logger.LogWarning(ex, "Resource not found");
             await WriteErrorAsync(context, StatusCodes.Status404NotFound, ex.Message);
         }
+        catch (NoAvailableSeatsException ex)
+        {
+            _logger.LogWarning(ex, "No available seats");
+            await WriteErrorAsync(context, StatusCodes.Status409Conflict, ex.Message);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unhandled exception");

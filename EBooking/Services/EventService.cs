@@ -1,17 +1,23 @@
 namespace EBooking.Services;
 
+using EBooking.DataStore;
 using EBooking.DTO;
 using EBooking.Exceptions;
 using EBooking.Interfaces;
 using EBooking.Models;
-
 
 /// <summary>
 /// Сервис для работы с мероприятиями
 /// </summary>
 public class EventsService : IEventsService
 {
-    private readonly List<Event> _events = [];
+    private readonly EventStore _eventStore;
+
+    public EventsService(EventStore eventStore)
+    {
+        _eventStore = eventStore;
+    }
+
     /// <summary>
     /// Получить список мероприятий с фильтрацией и пагинацией
     /// </summary>
@@ -31,27 +37,34 @@ public class EventsService : IEventsService
         {
             throw new ValidationException("PageSize must be greater than 0");
         }
-        IEnumerable<Event> filteredEvents = _events;
+
+        IEnumerable<Event> filteredEvents = _eventStore.GetAll();
+
         if (!string.IsNullOrWhiteSpace(query.Title))
         {
             filteredEvents = filteredEvents.Where(e =>
                 e.Title.Contains(query.Title, StringComparison.OrdinalIgnoreCase));
         }
+
         if (query.From.HasValue)
         {
             filteredEvents = filteredEvents.Where(e => e.StartAt >= query.From.Value);
         }
+
         if (query.To.HasValue)
         {
             filteredEvents = filteredEvents.Where(e => e.EndAt <= query.To.Value);
         }
+
         var totalCount = filteredEvents.Count();
+
         var items = filteredEvents
             .OrderBy(e => e.StartAt)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
             .Select(ToDto)
             .ToList();
+
         return new PaginatedResult<EventDto>
         {
             TotalCount = totalCount,
@@ -71,11 +84,13 @@ public class EventsService : IEventsService
     /// </exception>
     public EventDto GetEventById(Guid id)
     {
-        var eventItem = _events.FirstOrDefault(e => e.Id == id);
+        var eventItem = _eventStore.GetById(id);
+
         if (eventItem is null)
         {
             throw new NotFoundException($"Event with Id = {id} was not found");
         }
+
         return ToDto(eventItem);
     }
 
@@ -90,15 +105,22 @@ public class EventsService : IEventsService
     public EventDto CreateEvent(CreateEventDto eventData)
     {
         ValidateEventDates(eventData.StartAt, eventData.EndAt);
-        var newEvent = new Event
+
+        if (!eventData.TotalSeats.HasValue)
         {
-            Id = Guid.NewGuid(),
-            Title = eventData.Title,
-            Description = eventData.Description,
-            StartAt = eventData.StartAt,
-            EndAt = eventData.EndAt
-        };
-        _events.Add(newEvent);
+            throw new ValidationException("TotalSeats required");
+        }
+
+        var newEvent = Event.Create(
+            eventData.Title,
+            eventData.Description,
+            eventData.StartAt,
+            eventData.EndAt,
+            eventData.TotalSeats.Value
+        );
+
+        _eventStore.Add(newEvent);
+
         return ToDto(newEvent);
     }
 
@@ -117,15 +139,21 @@ public class EventsService : IEventsService
     public EventDto UpdateEvent(Guid id, UpdateEventDto eventData)
     {
         ValidateEventDates(eventData.StartAt, eventData.EndAt);
-        var eventToUpdate = _events.FirstOrDefault(e => e.Id == id);
+
+        var eventToUpdate = _eventStore.GetById(id);
+
         if (eventToUpdate is null)
         {
             throw new NotFoundException($"Event with Id = {id} was not found");
         }
+
         eventToUpdate.Title = eventData.Title;
         eventToUpdate.Description = eventData.Description;
         eventToUpdate.StartAt = eventData.StartAt;
         eventToUpdate.EndAt = eventData.EndAt;
+
+        _eventStore.Update(eventToUpdate);
+
         return ToDto(eventToUpdate);
     }
 
@@ -138,12 +166,14 @@ public class EventsService : IEventsService
     /// </exception>
     public void DeleteEvent(Guid id)
     {
-        var eventToRemove = _events.FirstOrDefault(e => e.Id == id);
+        var eventToRemove = _eventStore.GetById(id);
+
         if (eventToRemove is null)
         {
             throw new NotFoundException($"Event with Id = {id} was not found");
         }
-        _events.Remove(eventToRemove);
+
+        _eventStore.Delete(id);
     }
 
     /// <summary>
@@ -159,7 +189,9 @@ public class EventsService : IEventsService
             Title = eventItem.Title,
             Description = eventItem.Description,
             StartAt = eventItem.StartAt,
-            EndAt = eventItem.EndAt
+            EndAt = eventItem.EndAt,
+            TotalSeats = eventItem.TotalSeats,
+            AvailableSeats = eventItem.AvailableSeats
         };
     }
 

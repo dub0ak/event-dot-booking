@@ -10,8 +10,9 @@ using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddSingleton<IEventsService, EventsService>();
+builder.Services.AddSingleton<EventStore>();
 builder.Services.AddSingleton<BookingStore>();
+builder.Services.AddSingleton<IEventsService, EventsService>();
 builder.Services.AddSingleton<IBookingService, BookingService>();
 builder.Services.AddHostedService<BookingProcessingBackgroundService>();
 builder.Services.AddControllers();

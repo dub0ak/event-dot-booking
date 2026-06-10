@@ -6,14 +6,16 @@ using EBooking.Services;
 using EBooking.DataStore;
 using EBooking.BackgroundServices;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddSingleton<EventStore>();
-builder.Services.AddSingleton<BookingStore>();
-builder.Services.AddSingleton<IEventsService, EventsService>();
-builder.Services.AddSingleton<IBookingService, BookingService>();
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<IEventsService, EventsService>();
+builder.Services.AddScoped<IBookingService, BookingService>();
 builder.Services.AddHostedService<BookingProcessingBackgroundService>();
 builder.Services.AddControllers();
 
@@ -55,6 +57,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    context.Database.EnsureCreated();
+}
 
 app.MapControllers();
 app.Run();

@@ -5,18 +5,40 @@ using EBooking.DTO;
 using EBooking.Exceptions;
 using EBooking.Models;
 using EBooking.Services;
+using Microsoft.EntityFrameworkCore;
 
 public class BookingServiceTests
 {
-    private static (EventsService EventsService, BookingService BookingService, BookingStore BookingStore, EventStore EventStore)
-        CreateTestEnvironment()
+    private sealed class TestEnvironment
     {
-        var eventStore = new EventStore();
-        var bookingStore = new BookingStore();
-        var eventsService = new EventsService(eventStore);
-        var bookingService = new BookingService(bookingStore, eventStore);
+        public required DbContextOptions<AppDbContext> Options { get; init; }
+        public required AppDbContext Context { get; init; }
+        public required EventsService EventsService { get; init; }
+        public required BookingService BookingService { get; init; }
+    }
 
-        return (eventsService, bookingService, bookingStore, eventStore);
+    private static TestEnvironment CreateTestEnvironment()
+    {
+        var dbName = Guid.NewGuid().ToString();
+
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(dbName)
+            .Options;
+
+        var context = new AppDbContext(options);
+
+        return new TestEnvironment
+        {
+            Options = options,
+            Context = context,
+            EventsService = new EventsService(context),
+            BookingService = new BookingService(context)
+        };
+    }
+
+    private static BookingService CreateBookingService(DbContextOptions<AppDbContext> options)
+    {
+        return new BookingService(new AppDbContext(options));
     }
 
     private static CreateEventDto CreateValidCreateDto(
@@ -40,7 +62,8 @@ public class BookingServiceTests
     public async Task CreateBookingAsync_ShouldCreatePendingBooking_WhenEventExists()
     {
         var environment = CreateTestEnvironment();
-        var createdEvent = environment.EventsService.CreateEvent(CreateValidCreateDto());
+        var createdEvent = await environment.EventsService.CreateEventAsync(CreateValidCreateDto());
+
         var result = await environment.BookingService.CreateBookingAsync(createdEvent.Id);
 
         Assert.NotEqual(Guid.Empty, result.Id);
@@ -54,7 +77,8 @@ public class BookingServiceTests
     public async Task CreateBookingAsync_ShouldCreateUniqueBookings_ForSameEvent()
     {
         var environment = CreateTestEnvironment();
-        var createdEvent = environment.EventsService.CreateEvent(CreateValidCreateDto());
+        var createdEvent = await environment.EventsService.CreateEventAsync(CreateValidCreateDto());
+
         var booking1 = await environment.BookingService.CreateBookingAsync(createdEvent.Id);
         var booking2 = await environment.BookingService.CreateBookingAsync(createdEvent.Id);
 
@@ -69,8 +93,9 @@ public class BookingServiceTests
     public async Task GetBookingByIdAsync_ShouldReturnBooking_WhenBookingExists()
     {
         var environment = CreateTestEnvironment();
-        var createdEvent = environment.EventsService.CreateEvent(CreateValidCreateDto());
+        var createdEvent = await environment.EventsService.CreateEventAsync(CreateValidCreateDto());
         var createdBooking = await environment.BookingService.CreateBookingAsync(createdEvent.Id);
+
         var result = await environment.BookingService.GetBookingByIdAsync(createdBooking.Id);
 
         Assert.Equal(createdBooking.Id, result.Id);
@@ -82,12 +107,16 @@ public class BookingServiceTests
     public async Task GetBookingByIdAsync_ShouldReflectConfirmedStatus_WhenBookingWasConfirmed()
     {
         var environment = CreateTestEnvironment();
-        var createdEvent = environment.EventsService.CreateEvent(CreateValidCreateDto());
+        var createdEvent = await environment.EventsService.CreateEventAsync(CreateValidCreateDto());
         var createdBooking = await environment.BookingService.CreateBookingAsync(createdEvent.Id);
-        var bookingEntity = environment.BookingStore.GetById(createdBooking.Id);
+
+        var bookingEntity = await environment.Context.Bookings
+            .FirstOrDefaultAsync(b => b.Id == createdBooking.Id);
+
         Assert.NotNull(bookingEntity);
 
         bookingEntity!.Confirm();
+        await environment.Context.SaveChangesAsync();
 
         var result = await environment.BookingService.GetBookingByIdAsync(createdBooking.Id);
 
@@ -99,12 +128,16 @@ public class BookingServiceTests
     public async Task GetBookingByIdAsync_ShouldReflectRejectedStatus_WhenBookingWasRejected()
     {
         var environment = CreateTestEnvironment();
-        var createdEvent = environment.EventsService.CreateEvent(CreateValidCreateDto());
+        var createdEvent = await environment.EventsService.CreateEventAsync(CreateValidCreateDto());
         var createdBooking = await environment.BookingService.CreateBookingAsync(createdEvent.Id);
-        var bookingEntity = environment.BookingStore.GetById(createdBooking.Id);
+
+        var bookingEntity = await environment.Context.Bookings
+            .FirstOrDefaultAsync(b => b.Id == createdBooking.Id);
+
         Assert.NotNull(bookingEntity);
 
         bookingEntity!.Reject();
+        await environment.Context.SaveChangesAsync();
 
         var result = await environment.BookingService.GetBookingByIdAsync(createdBooking.Id);
 
@@ -117,9 +150,10 @@ public class BookingServiceTests
     {
         var environment = CreateTestEnvironment();
         var missingEventId = Guid.NewGuid();
-        var action = async () => await environment.BookingService.CreateBookingAsync(missingEventId);
 
-        var exception = await Assert.ThrowsAsync<NotFoundException>(action);
+        var exception = await Assert.ThrowsAsync<NotFoundException>(
+            () => environment.BookingService.CreateBookingAsync(missingEventId));
+
         Assert.Contains(missingEventId.ToString(), exception.Message);
     }
 
@@ -127,10 +161,12 @@ public class BookingServiceTests
     public async Task CreateBookingAsync_ShouldThrowNotFoundException_WhenEventWasDeleted()
     {
         var environment = CreateTestEnvironment();
-        var createdEvent = environment.EventsService.CreateEvent(CreateValidCreateDto());
-        environment.EventsService.DeleteEvent(createdEvent.Id);
-        var action = async () => await environment.BookingService.CreateBookingAsync(createdEvent.Id);
-        await Assert.ThrowsAsync<NotFoundException>(action);
+        var createdEvent = await environment.EventsService.CreateEventAsync(CreateValidCreateDto());
+
+        await environment.EventsService.DeleteEventAsync(createdEvent.Id);
+
+        await Assert.ThrowsAsync<NotFoundException>(
+            () => environment.BookingService.CreateBookingAsync(createdEvent.Id));
     }
 
     [Fact]
@@ -138,8 +174,10 @@ public class BookingServiceTests
     {
         var environment = CreateTestEnvironment();
         var missingBookingId = Guid.NewGuid();
-        var action = async () => await environment.BookingService.GetBookingByIdAsync(missingBookingId);
-        var exception = await Assert.ThrowsAsync<NotFoundException>(action);
+
+        var exception = await Assert.ThrowsAsync<NotFoundException>(
+            () => environment.BookingService.GetBookingByIdAsync(missingBookingId));
+
         Assert.Contains(missingBookingId.ToString(), exception.Message);
     }
 
@@ -148,13 +186,12 @@ public class BookingServiceTests
     {
         var environment = CreateTestEnvironment();
 
-        var createdEvent = environment.EventsService.CreateEvent(
-            CreateValidCreateDto(totalSeats: 3)
-        );
+        var createdEvent = await environment.EventsService.CreateEventAsync(
+            CreateValidCreateDto(totalSeats: 3));
 
         await environment.BookingService.CreateBookingAsync(createdEvent.Id);
 
-        var eventAfterBooking = environment.EventsService.GetEventById(createdEvent.Id);
+        var eventAfterBooking = await environment.EventsService.GetEventByIdAsync(createdEvent.Id);
 
         Assert.Equal(3, eventAfterBooking.TotalSeats);
         Assert.Equal(2, eventAfterBooking.AvailableSeats);
@@ -164,14 +201,19 @@ public class BookingServiceTests
     public async Task CreateBookingAsync_ShouldThrowNoAvailableSeatsException_WhenNoSeatsAvailable()
     {
         var environment = CreateTestEnvironment();
-        var createdEvent = environment.EventsService.CreateEvent(
-            CreateValidCreateDto(totalSeats: 1)
-        );
+
+        var createdEvent = await environment.EventsService.CreateEventAsync(
+            CreateValidCreateDto(totalSeats: 1));
+
         await environment.BookingService.CreateBookingAsync(createdEvent.Id);
-        var action = async () => await environment.BookingService.CreateBookingAsync(createdEvent.Id);
-        var exception = await Assert.ThrowsAsync<NoAvailableSeatsException>(action);
+
+        var exception = await Assert.ThrowsAsync<NoAvailableSeatsException>(
+            () => environment.BookingService.CreateBookingAsync(createdEvent.Id));
+
         Assert.Equal("No available seats for this event", exception.Message);
-        var eventAfterFailedBooking = environment.EventsService.GetEventById(createdEvent.Id);
+
+        var eventAfterFailedBooking = await environment.EventsService.GetEventByIdAsync(createdEvent.Id);
+
         Assert.Equal(0, eventAfterFailedBooking.AvailableSeats);
     }
 
@@ -179,17 +221,19 @@ public class BookingServiceTests
     public async Task CreateBookingAsync_ShouldPreventOverbooking_WhenRequestsAreConcurrent()
     {
         var environment = CreateTestEnvironment();
-        var createdEvent = environment.EventsService.CreateEvent(
-            CreateValidCreateDto(totalSeats: 5)
-        );
+
+        var createdEvent = await environment.EventsService.CreateEventAsync(
+            CreateValidCreateDto(totalSeats: 5));
 
         var tasks = Enumerable
             .Range(0, 20)
             .Select(_ => Task.Run(async () =>
             {
+                var bookingService = CreateBookingService(environment.Options);
+
                 try
                 {
-                    var booking = await environment.BookingService.CreateBookingAsync(createdEvent.Id);
+                    var booking = await bookingService.CreateBookingAsync(createdEvent.Id);
                     return (Success: true, Booking: booking, Exception: (Exception?)null);
                 }
                 catch (Exception ex)
@@ -200,14 +244,18 @@ public class BookingServiceTests
             .ToList();
 
         var results = await Task.WhenAll(tasks);
+
         var successfulResults = results.Where(r => r.Success).ToList();
         var failedResults = results.Where(r => !r.Success).ToList();
+
         Assert.Equal(5, successfulResults.Count);
         Assert.Equal(15, failedResults.Count);
+
         Assert.All(failedResults, result =>
-            Assert.IsType<NoAvailableSeatsException>(result.Exception)
-        );
-        var eventAfterBookings = environment.EventsService.GetEventById(createdEvent.Id);
+            Assert.IsType<NoAvailableSeatsException>(result.Exception));
+
+        var eventAfterBookings = await environment.EventsService.GetEventByIdAsync(createdEvent.Id);
+
         Assert.Equal(0, eventAfterBookings.AvailableSeats);
     }
 
@@ -215,22 +263,32 @@ public class BookingServiceTests
     public async Task CreateBookingAsync_ShouldCreateUniqueIds_WhenRequestsAreConcurrent()
     {
         var environment = CreateTestEnvironment();
-        var createdEvent = environment.EventsService.CreateEvent(
-            CreateValidCreateDto(totalSeats: 10)
-        );
+
+        var createdEvent = await environment.EventsService.CreateEventAsync(
+            CreateValidCreateDto(totalSeats: 10));
+
         var tasks = Enumerable
             .Range(0, 10)
-            .Select(_ => Task.Run(() =>
-                environment.BookingService.CreateBookingAsync(createdEvent.Id)))
+            .Select(_ => Task.Run(async () =>
+            {
+                var bookingService = CreateBookingService(environment.Options);
+                return await bookingService.CreateBookingAsync(createdEvent.Id);
+            }))
             .ToList();
+
         var bookings = await Task.WhenAll(tasks);
+
         Assert.Equal(10, bookings.Length);
+
         var uniqueIds = bookings
             .Select(b => b.Id)
             .Distinct()
             .Count();
+
         Assert.Equal(10, uniqueIds);
-        var eventAfterBookings = environment.EventsService.GetEventById(createdEvent.Id);
+
+        var eventAfterBookings = await environment.EventsService.GetEventByIdAsync(createdEvent.Id);
+
         Assert.Equal(0, eventAfterBookings.AvailableSeats);
     }
 }

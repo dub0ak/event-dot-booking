@@ -91,4 +91,11 @@ public class Event
 
         AvailableSeats = Math.Min(TotalSeats, AvailableSeats + count);
     }
+
+    private Event()
+    {
+        Title = null!;
+    }
+
+    public ICollection<Booking> Bookings { get; private set; } = [];
 }

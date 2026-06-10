@@ -5,24 +5,27 @@ using EBooking.DTO;
 using EBooking.Exceptions;
 using EBooking.Interfaces;
 using EBooking.Models;
+using Microsoft.EntityFrameworkCore;
 
 public class BookingService : IBookingService
 {
-    private readonly BookingStore _bookingStore;
-    private readonly EventStore _eventStore;
-    private readonly object _bookingLock = new();
+    private static readonly SemaphoreSlim BookingSemaphore = new(1, 1);
 
-    public BookingService(BookingStore bookingStore, EventStore eventStore)
+    private readonly AppDbContext _context;
+
+    public BookingService(AppDbContext context)
     {
-        _bookingStore = bookingStore;
-        _eventStore = eventStore;
+        _context = context;
     }
 
-    public Task<BookingDto> CreateBookingAsync(Guid eventId)
+    public async Task<BookingDto> CreateBookingAsync(Guid eventId)
     {
-        lock (_bookingLock)
+        await BookingSemaphore.WaitAsync();
+
+        try
         {
-            var eventItem = _eventStore.GetById(eventId);
+            var eventItem = await _context.Events
+                .FirstOrDefaultAsync(e => e.Id == eventId);
 
             if (eventItem is null)
             {
@@ -34,25 +37,31 @@ public class BookingService : IBookingService
                 throw new NoAvailableSeatsException("No available seats for this event");
             }
 
-            _eventStore.Update(eventItem);
-
             var booking = Booking.CreatePending(eventId);
-            _bookingStore.Add(booking);
 
-            return Task.FromResult(ToDto(booking));
+            await _context.Bookings.AddAsync(booking);
+            await _context.SaveChangesAsync();
+
+            return ToDto(booking);
+        }
+        finally
+        {
+            BookingSemaphore.Release();
         }
     }
 
-    public Task<BookingDto> GetBookingByIdAsync(Guid bookingId)
+    public async Task<BookingDto> GetBookingByIdAsync(Guid bookingId)
     {
-        var booking = _bookingStore.GetById(bookingId);
+        var booking = await _context.Bookings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(b => b.Id == bookingId);
 
         if (booking is null)
         {
             throw new NotFoundException($"Booking with Id = {bookingId} was not found");
         }
 
-        return Task.FromResult(ToDto(booking));
+        return ToDto(booking);
     }
 
     private static BookingDto ToDto(Booking booking)

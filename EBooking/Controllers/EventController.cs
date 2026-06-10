@@ -25,9 +25,9 @@ public class EventsController(IEventsService eventsService, IBookingService book
     [ProducesResponseType(typeof(ApiResult<PaginatedResult<EventDto>>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public ActionResult<ApiResult<PaginatedResult<EventDto>>> GetEvents([FromQuery] GetEventsQueryDto query)
+    public async Task<ActionResult<ApiResult<PaginatedResult<EventDto>>>> GetEvents([FromQuery] GetEventsQueryDto query)
     {
-        var result = _eventsService.GetEvents(query);
+        var result = await _eventsService.GetEventsAsync(query);
 
         return Ok(new ApiResult<PaginatedResult<EventDto>>
         {
@@ -47,9 +47,9 @@ public class EventsController(IEventsService eventsService, IBookingService book
     [ProducesResponseType(typeof(ApiResult<EventDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public ActionResult<ApiResult<EventDto>> GetEventById(Guid id)
+    public async Task<ActionResult<ApiResult<EventDto>>> GetEventById(Guid id)
     {
-        var eventToReturn = _eventsService.GetEventById(id);
+        var eventToReturn = await _eventsService.GetEventByIdAsync(id);
 
         return Ok(new ApiResult<EventDto>
         {
@@ -70,9 +70,9 @@ public class EventsController(IEventsService eventsService, IBookingService book
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public ActionResult<ApiResult<EventDto>> CreateEvent([FromBody] CreateEventDto eventData)
+    public async Task<ActionResult<ApiResult<EventDto>>> CreateEvent([FromBody] CreateEventDto eventData)
     {
-        var createdEvent = _eventsService.CreateEvent(eventData);
+        var createdEvent = await _eventsService.CreateEventAsync(eventData);
 
         return CreatedAtAction(
             nameof(GetEventById),
@@ -97,9 +97,9 @@ public class EventsController(IEventsService eventsService, IBookingService book
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public ActionResult<ApiResult<EventDto>> UpdateEvent(Guid id, [FromBody] UpdateEventDto eventData)
+    public async Task<ActionResult<ApiResult<EventDto>>> UpdateEvent(Guid id, [FromBody] UpdateEventDto eventData)
     {
-        var updatedEvent = _eventsService.UpdateEvent(id, eventData);
+        var updatedEvent = await _eventsService.UpdateEventAsync(id, eventData);
 
         return Ok(new ApiResult<EventDto>
         {
@@ -117,9 +117,9 @@ public class EventsController(IEventsService eventsService, IBookingService book
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public IActionResult DeleteEvent(Guid id)
+    public async Task<IActionResult> DeleteEvent(Guid id)
     {
-        _eventsService.DeleteEvent(id);
+        await _eventsService.DeleteEventAsync(id);
         return NoContent();
     }
 

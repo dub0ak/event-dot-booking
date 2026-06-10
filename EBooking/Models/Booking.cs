@@ -64,4 +64,10 @@ public class Booking
 
         return true;
     }
+
+    private Booking()
+    {
+    }
+
+    public Event? Event { get; private set; }
 }

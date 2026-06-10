@@ -1,22 +1,20 @@
 namespace EBooking.Services;
 
-using EBooking.DataStore;
 using EBooking.DTO;
 using EBooking.Exceptions;
 using EBooking.Interfaces;
 using EBooking.Models;
-using Microsoft.EntityFrameworkCore;
 
 /// <summary>
 /// Сервис для работы с мероприятиями
 /// </summary>
 public class EventsService : IEventsService
 {
-    private readonly AppDbContext _context;
+    private readonly IEventRepository _eventRepository;
 
-    public EventsService(AppDbContext context)
+    public EventsService(IEventRepository eventRepository)
     {
-        _context = context;
+        _eventRepository = eventRepository;
     }
 
     /// <summary>
@@ -34,50 +32,16 @@ public class EventsService : IEventsService
             throw new ValidationException("PageSize must be greater than 0");
         }
 
-        IQueryable<Event> filteredEvents = _context.Events.AsNoTracking();
-
-        if (!string.IsNullOrWhiteSpace(query.Title))
-        {
-            var title = query.Title.ToLower();
-
-            filteredEvents = filteredEvents.Where(e =>
-                e.Title.ToLower().Contains(title));
-        }
-
-        if (query.From.HasValue)
-        {
-            filteredEvents = filteredEvents.Where(e => e.StartAt >= query.From.Value);
-        }
-
-        if (query.To.HasValue)
-        {
-            filteredEvents = filteredEvents.Where(e => e.EndAt <= query.To.Value);
-        }
-
-        var totalCount = await filteredEvents.CountAsync();
-
-        var items = await filteredEvents
-            .OrderBy(e => e.StartAt)
-            .Skip((query.Page - 1) * query.PageSize)
-            .Take(query.PageSize)
-            .Select(e => new EventDto
-            {
-                Id = e.Id,
-                Title = e.Title,
-                Description = e.Description,
-                StartAt = e.StartAt,
-                EndAt = e.EndAt,
-                TotalSeats = e.TotalSeats,
-                AvailableSeats = e.AvailableSeats
-            })
-            .ToListAsync();
+        var result = await _eventRepository.GetEventsAsync(query);
 
         return new PaginatedResult<EventDto>
         {
-            TotalCount = totalCount,
-            Page = query.Page,
-            PageSize = query.PageSize,
-            Items = items
+            TotalCount = result.TotalCount,
+            Page = result.Page,
+            PageSize = result.PageSize,
+            Items = result.Items
+                .Select(ToDto)
+                .ToList()
         };
     }
 
@@ -86,9 +50,7 @@ public class EventsService : IEventsService
     /// </summary>
     public async Task<EventDto> GetEventByIdAsync(Guid id)
     {
-        var eventItem = await _context.Events
-            .AsNoTracking()
-            .FirstOrDefaultAsync(e => e.Id == id);
+        var eventItem = await _eventRepository.GetByIdAsync(id);
 
         if (eventItem is null)
         {
@@ -118,8 +80,8 @@ public class EventsService : IEventsService
             eventData.TotalSeats.Value
         );
 
-        await _context.Events.AddAsync(newEvent);
-        await _context.SaveChangesAsync();
+        await _eventRepository.AddAsync(newEvent);
+        await _eventRepository.SaveChangesAsync();
 
         return ToDto(newEvent);
     }
@@ -131,8 +93,9 @@ public class EventsService : IEventsService
     {
         ValidateEventDates(eventData.StartAt, eventData.EndAt);
 
-        var eventToUpdate = await _context.Events
-            .FirstOrDefaultAsync(e => e.Id == id);
+        var eventToUpdate = await _eventRepository.GetByIdAsync(
+            id,
+            asNoTracking: false);
 
         if (eventToUpdate is null)
         {
@@ -144,7 +107,7 @@ public class EventsService : IEventsService
         eventToUpdate.StartAt = eventData.StartAt;
         eventToUpdate.EndAt = eventData.EndAt;
 
-        await _context.SaveChangesAsync();
+        await _eventRepository.SaveChangesAsync();
 
         return ToDto(eventToUpdate);
     }
@@ -154,16 +117,17 @@ public class EventsService : IEventsService
     /// </summary>
     public async Task DeleteEventAsync(Guid id)
     {
-        var eventToRemove = await _context.Events
-            .FirstOrDefaultAsync(e => e.Id == id);
+        var eventToRemove = await _eventRepository.GetByIdAsync(
+            id,
+            asNoTracking: false);
 
         if (eventToRemove is null)
         {
             throw new NotFoundException($"Event with Id = {id} was not found");
         }
 
-        _context.Events.Remove(eventToRemove);
-        await _context.SaveChangesAsync();
+        await _eventRepository.DeleteAsync(eventToRemove);
+        await _eventRepository.SaveChangesAsync();
     }
 
     private static EventDto ToDto(Event eventItem)

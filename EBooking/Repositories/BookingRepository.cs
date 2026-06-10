@@ -1,0 +1,52 @@
+namespace EBooking.Repositories;
+
+using EBooking.DataStore;
+using EBooking.Interfaces;
+using EBooking.Models;
+using Microsoft.EntityFrameworkCore;
+
+public class BookingRepository : IBookingRepository
+{
+    private readonly AppDbContext _context;
+
+    public BookingRepository(AppDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<Booking?> GetByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default,
+        bool asNoTracking = true)
+    {
+        var query = _context.Bookings.AsQueryable();
+
+        if (asNoTracking)
+        {
+            query = query.AsNoTracking();
+        }
+
+        return await query.FirstOrDefaultAsync(
+            b => b.Id == id,
+            cancellationToken);
+    }
+
+    public async Task<List<Guid>> GetPendingBookingIdsAsync(CancellationToken cancellationToken)
+    {
+        return await _context.Bookings
+            .AsNoTracking()
+            .Where(b => b.Status == BookingStatus.Pending)
+            .Select(b => b.Id)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task AddAsync(Booking booking)
+    {
+        await _context.Bookings.AddAsync(booking);
+    }
+
+    public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+}

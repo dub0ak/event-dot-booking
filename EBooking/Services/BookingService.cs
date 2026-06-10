@@ -1,21 +1,23 @@
 namespace EBooking.Services;
 
-using EBooking.DataStore;
 using EBooking.DTO;
 using EBooking.Exceptions;
 using EBooking.Interfaces;
 using EBooking.Models;
-using Microsoft.EntityFrameworkCore;
 
 public class BookingService : IBookingService
 {
     private static readonly SemaphoreSlim BookingSemaphore = new(1, 1);
 
-    private readonly AppDbContext _context;
+    private readonly IEventRepository _eventRepository;
+    private readonly IBookingRepository _bookingRepository;
 
-    public BookingService(AppDbContext context)
+    public BookingService(
+        IEventRepository eventRepository,
+        IBookingRepository bookingRepository)
     {
-        _context = context;
+        _eventRepository = eventRepository;
+        _bookingRepository = bookingRepository;
     }
 
     public async Task<BookingDto> CreateBookingAsync(Guid eventId)
@@ -24,8 +26,9 @@ public class BookingService : IBookingService
 
         try
         {
-            var eventItem = await _context.Events
-                .FirstOrDefaultAsync(e => e.Id == eventId);
+            var eventItem = await _eventRepository.GetByIdAsync(
+                eventId,
+                asNoTracking: false);
 
             if (eventItem is null)
             {
@@ -39,8 +42,8 @@ public class BookingService : IBookingService
 
             var booking = Booking.CreatePending(eventId);
 
-            await _context.Bookings.AddAsync(booking);
-            await _context.SaveChangesAsync();
+            await _bookingRepository.AddAsync(booking);
+            await _bookingRepository.SaveChangesAsync();
 
             return ToDto(booking);
         }
@@ -52,9 +55,7 @@ public class BookingService : IBookingService
 
     public async Task<BookingDto> GetBookingByIdAsync(Guid bookingId)
     {
-        var booking = await _context.Bookings
-            .AsNoTracking()
-            .FirstOrDefaultAsync(b => b.Id == bookingId);
+        var booking = await _bookingRepository.GetByIdAsync(bookingId);
 
         if (booking is null)
         {

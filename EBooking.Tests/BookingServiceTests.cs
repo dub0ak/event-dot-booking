@@ -5,6 +5,7 @@ using EBooking.DTO;
 using EBooking.Exceptions;
 using EBooking.Models;
 using EBooking.Services;
+using EBooking.Repositories;
 using Microsoft.EntityFrameworkCore;
 
 public class BookingServiceTests
@@ -26,19 +27,26 @@ public class BookingServiceTests
             .Options;
 
         var context = new AppDbContext(options);
+        var eventRepository = new EventRepository(context);
+        var bookingRepository = new BookingRepository(context);
 
         return new TestEnvironment
         {
             Options = options,
             Context = context,
-            EventsService = new EventsService(context),
-            BookingService = new BookingService(context)
+            EventsService = new EventsService(eventRepository),
+            BookingService = new BookingService(eventRepository, bookingRepository)
         };
     }
 
     private static BookingService CreateBookingService(DbContextOptions<AppDbContext> options)
     {
-        return new BookingService(new AppDbContext(options));
+        var context = new AppDbContext(options);
+
+        var eventRepository = new EventRepository(context);
+        var bookingRepository = new BookingRepository(context);
+
+        return new BookingService(eventRepository, bookingRepository);
     }
 
     private static CreateEventDto CreateValidCreateDto(

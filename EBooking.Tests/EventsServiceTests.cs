@@ -4,6 +4,7 @@ using EBooking.DataStore;
 using EBooking.DTO;
 using EBooking.Exceptions;
 using EBooking.Services;
+using EBooking.Repositories;
 using Microsoft.EntityFrameworkCore;
 
 public class EventsServiceTests
@@ -18,7 +19,9 @@ public class EventsServiceTests
 
         var context = new AppDbContext(options);
 
-        return new EventsService(context);
+        var repository = new EventRepository(context);
+
+        return new EventsService(repository);
     }
 
     private static CreateEventDto CreateValidCreateDto(

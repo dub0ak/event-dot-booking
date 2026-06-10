@@ -4,7 +4,7 @@
 
 EBooking — REST API для управления мероприятиями и бронированиями, реализованный на ASP.NET Core Web API.
 
-Проект позволяет создавать мероприятия, управлять списком событий, выполнять бронирование мест и отслеживать статус бронирований. Для хранения данных используется PostgreSQL, а доступ к данным реализован через Entity Framework Core.
+Проект позволяет создавать мероприятия, получать списки событий, выполнять бронирование мест и отслеживать статус бронирований. Для хранения данных используется PostgreSQL.
 
 ---
 
@@ -29,19 +29,23 @@ EBooking — REST API для управления мероприятиями и 
 - Получение статуса бронирования
 - Асинхронная обработка бронирований
 - Автоматическое подтверждение бронирований
-- Автоматическое отклонение бронирований при ошибках
+- Автоматическое отклонение бронирований
 - Возврат мест при отклонении бронирования
 - Защита от овербукинга
 - Поддержка конкурентных запросов
 
-### Общее
+### Инфраструктура
 
 - Swagger UI
 - Глобальная обработка ошибок
 - Dependency Injection
-- Unit-тестирование
-- PostgreSQL
 - Entity Framework Core
+- PostgreSQL
+- EF Core Migrations
+- Repository Pattern
+- Unit Tests
+- Integration Tests
+- Testcontainers
 
 ---
 
@@ -53,12 +57,13 @@ EBooking — REST API для управления мероприятиями и 
 - Entity Framework Core
 - PostgreSQL
 - Npgsql.EntityFrameworkCore.PostgreSQL
+- EF Core Migrations
 - Swagger (Swashbuckle)
 - Dependency Injection
 - BackgroundService
 - Docker Compose
+- Testcontainers
 - xUnit
-- EF Core InMemory Provider
 
 ---
 
@@ -68,7 +73,8 @@ EBooking — REST API для управления мероприятиями и 
 
 - Controllers — HTTP API
 - Services — бизнес-логика
-- Data Access — Entity Framework Core
+- Repositories — доступ к данным
+- Entity Framework Core — ORM
 - PostgreSQL — постоянное хранилище данных
 
 Основные сущности:
@@ -76,9 +82,13 @@ EBooking — REST API для управления мероприятиями и 
 - Event
 - Booking
 
-Для доступа к данным используется AppDbContext.
+Для доступа к данным используются:
 
-Маппинг сущностей выполняется через Fluent API с использованием IEntityTypeConfiguration<T>.
+- AppDbContext
+- EventRepository
+- BookingRepository
+
+Сервисы не работают с AppDbContext напрямую и используют репозитории через интерфейсы.
 
 ---
 
@@ -89,20 +99,27 @@ EBooking/
 ├── BackgroundServices/
 ├── Controllers/
 ├── DataStore/
-│   ├── AppDbContext.cs
-│   └── Configurations/
 ├── DTO/
 ├── Exceptions/
 ├── Handlers/
 ├── Interfaces/
-├── Middleware/
+├── Migrations/
+├── Middlewares/
 ├── Models/
+├── Repositories/
 ├── Services/
-├── Program.cs
+└── Program.cs
 
 EBooking.Tests/
 ├── BookingServiceTests.cs
 └── EventsServiceTests.cs
+
+EBooking.IntegrationTests/
+├── EventRepositoryTests.cs
+├── BookingRepositoryTests.cs
+├── MigrationsTests.cs
+├── PostgresFixture.cs
+└── PostgresCollection.cs
 ```
 
 ---
@@ -111,12 +128,12 @@ EBooking.Tests/
 
 Проект использует PostgreSQL в качестве основного хранилища данных.
 
-Для работы с БД применяется Entity Framework Core.
+Схема базы данных управляется миграциями EF Core.
 
-Схема базы данных автоматически создаётся при запуске приложения:
+При запуске приложения автоматически выполняется:
 
 ```csharp
-context.Database.EnsureCreated();
+db.Database.Migrate();
 ```
 
 Создаваемые таблицы:
@@ -127,7 +144,35 @@ context.Database.EnsureCreated();
 Связь между таблицами:
 
 ```text
-Booking.EventId -> Event.Id
+bookings.event_id -> events.id
+```
+
+---
+
+## Миграции
+
+Создание новой миграции:
+
+```bash
+dotnet ef migrations add MigrationName --project EBooking
+```
+
+Применение миграций:
+
+```bash
+dotnet ef database update --project EBooking
+```
+
+Удаление последней миграции:
+
+```bash
+dotnet ef migrations remove --project EBooking
+```
+
+Текущая начальная миграция:
+
+```text
+InitialCreate
 ```
 
 ---
@@ -140,13 +185,9 @@ Booking.EventId -> Event.Id
 private static readonly SemaphoreSlim BookingSemaphore = new(1, 1);
 ```
 
-Это гарантирует корректную обработку конкурентных запросов на бронирование и предотвращает резервирование большего количества мест, чем доступно в мероприятии.
-
 ---
 
 ## Запуск PostgreSQL
-
-Запуск контейнера:
 
 ```bash
 docker compose up -d
@@ -158,40 +199,30 @@ docker compose up -d
 docker ps
 ```
 
-Пример строки подключения:
-
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Host=localhost;Port=5432;Database=ebooking;Username=postgres;Password=postgres"
-  }
-}
-```
-
 ---
 
 ## Запуск проекта
 
-### 1. Клонирование репозитория
+### Клонирование репозитория
 
 ```bash
 git clone <repository_url>
 cd event-dot-booking
 ```
 
-### 2. Запуск PostgreSQL
+### Запуск PostgreSQL
 
 ```bash
 docker compose up -d
 ```
 
-### 3. Сборка проекта
+### Сборка
 
 ```bash
 dotnet build
 ```
 
-### 4. Запуск приложения
+### Запуск приложения
 
 ```bash
 dotnet run --project EBooking
@@ -211,22 +242,37 @@ http://localhost:5000/swagger
 
 ## Тестирование
 
-Запуск тестов:
+### Unit Tests
+
+```bash
+dotnet test EBooking.Tests
+```
+
+### Integration Tests
+
+```bash
+dotnet test EBooking.IntegrationTests
+```
+
+Для запуска интеграционных тестов требуется запущенный Docker.
+
+Интеграционные тесты автоматически поднимают PostgreSQL через Testcontainers.
+
+Покрываются:
+
+- Применение миграций
+- EventRepository
+- BookingRepository
+- Работа с PostgreSQL
+- Фильтрация
+- Пагинация
+- Изменение статусов бронирований
+
+### Запуск всех тестов
 
 ```bash
 dotnet test
 ```
-
-Тесты используют EF Core InMemory Provider.
-
-Покрываются следующие сценарии:
-
-- CRUD-операции мероприятий
-- Создание бронирований
-- Валидация бизнес-правил
-- Ограничение количества мест
-- Защита от овербукинга
-- Конкурентные запросы
 
 ---
 
@@ -258,18 +304,6 @@ GET /events/{id}
 POST /events
 ```
 
-Пример тела запроса:
-
-```json
-{
-  "title": "ASP.NET Meetup",
-  "description": "Introduction to ASP.NET Core",
-  "startAt": "2026-04-10T10:00:00",
-  "endAt": "2026-04-10T12:00:00",
-  "totalSeats": 100
-}
-```
-
 ### Обновить мероприятие
 
 ```http
@@ -288,13 +322,7 @@ DELETE /events/{id}
 POST /events/{id}/book
 ```
 
-Возвращает:
-
-```text
-202 Accepted
-```
-
-Начальный статус бронирования:
+Начальный статус:
 
 ```text
 Pending
@@ -316,7 +344,7 @@ GET /bookings/{id}
 Pending
 ```
 
-Фоновый сервис BookingProcessingBackgroundService периодически проверяет необработанные бронирования и переводит их в:
+Фоновый сервис `BookingProcessingBackgroundService` периодически получает необработанные бронирования через репозиторий и переводит их в:
 
 ```text
 Confirmed
@@ -327,33 +355,3 @@ Confirmed
 ```text
 Rejected
 ```
-
-Для корректной работы со scoped-зависимостями используется IServiceScopeFactory.
-
-Каждая операция обработки выполняется в собственном DI Scope и использует собственный экземпляр AppDbContext.
-
----
-
-## Пример защиты от овербукинга
-
-Событие:
-
-```text
-TotalSeats = 3
-```
-
-Первые три запроса:
-
-```http
-POST /events/{id}/book
-```
-
-будут успешно обработаны.
-
-Следующий запрос вернёт:
-
-```text
-409 Conflict
-```
-
-Количество бронирований никогда не превысит количество доступных мест даже при параллельных запросах.

@@ -2,9 +2,9 @@
 
 ## Описание
 
-EBooking — REST API-сервис для управления мероприятиями, реализованный на ASP.NET Core Web API.
+EBooking — REST API для управления мероприятиями и бронированиями, реализованный на ASP.NET Core Web API.
 
-Проект представляет собой каркас backend-приложения с CRUD-операциями.
+Проект позволяет создавать мероприятия, управлять списком событий, выполнять бронирование мест и отслеживать статус бронирований. Для хранения данных используется PostgreSQL, а доступ к данным реализован через Entity Framework Core.
 
 ---
 
@@ -14,53 +14,83 @@ EBooking — REST API-сервис для управления мероприя�
 
 - Создание мероприятий
 - Получение списка мероприятий
-- Получение мероприятия по ID
+- Получение мероприятия по идентификатору
 - Обновление мероприятия
 - Удаление мероприятия
-- Фильтрация по названию и датам
-- Пагинация
+- Фильтрация по названию
+- Фильтрация по диапазону дат
+- Пагинация результатов
 - Ограничение количества мест
-- Защита от овербукинга
+- Отслеживание количества свободных мест
 
 ### Работа с бронированиями
 
-- Создание брони (202 Accepted)
-- Получение статуса брони
+- Создание бронирования
+- Получение статуса бронирования
 - Асинхронная обработка бронирований
-- Фоновый сервис обработки
-- Параллельная обработка бронирований
-- Автоматическое подтверждение брони
-- Автоматическое отклонение брони при ошибках
-- Возврат мест при отклонении брони
-- 409 Conflict при отсутствии свободных мест
+- Автоматическое подтверждение бронирований
+- Автоматическое отклонение бронирований при ошибках
+- Возврат мест при отклонении бронирования
+- Защита от овербукинга
+- Поддержка конкурентных запросов
 
 ### Общее
 
-- Валидация входных данных
 - Swagger UI
 - Глобальная обработка ошибок
-- Unit-тесты бизнес-логики
+- Dependency Injection
+- Unit-тестирование
+- PostgreSQL
+- Entity Framework Core
 
 ---
 
 ## Технологии
 
-* C#
-* .NET 8+
-* ASP.NET Core Web API
-* Swagger (Swashbuckle)
-* Dependency Injection (DI)
-* BackgroundService
-* xUnit
+- C#
+- .NET 8
+- ASP.NET Core Web API
+- Entity Framework Core
+- PostgreSQL
+- Npgsql.EntityFrameworkCore.PostgreSQL
+- Swagger (Swashbuckle)
+- Dependency Injection
+- BackgroundService
+- Docker Compose
+- xUnit
+- EF Core InMemory Provider
 
+---
+
+## Архитектура
+
+Проект использует многослойную архитектуру:
+
+- Controllers — HTTP API
+- Services — бизнес-логика
+- Data Access — Entity Framework Core
+- PostgreSQL — постоянное хранилище данных
+
+Основные сущности:
+
+- Event
+- Booking
+
+Для доступа к данным используется AppDbContext.
+
+Маппинг сущностей выполняется через Fluent API с использованием IEntityTypeConfiguration<T>.
 
 ---
 
 ## Структура проекта
 
-```
+```text
 EBooking/
+├── BackgroundServices/
 ├── Controllers/
+├── DataStore/
+│   ├── AppDbContext.cs
+│   └── Configurations/
 ├── DTO/
 ├── Exceptions/
 ├── Handlers/
@@ -68,27 +98,75 @@ EBooking/
 ├── Middleware/
 ├── Models/
 ├── Services/
-├── DataStore/
-├── BackgroundServices/
 ├── Program.cs
 
 EBooking.Tests/
-├── EventsServiceTests.cs
-└── BookingServiceTests.cs
-
-README.md 
+├── BookingServiceTests.cs
+└── EventsServiceTests.cs
 ```
+
+---
+
+## База данных
+
+Проект использует PostgreSQL в качестве основного хранилища данных.
+
+Для работы с БД применяется Entity Framework Core.
+
+Схема базы данных автоматически создаётся при запуске приложения:
+
+```csharp
+context.Database.EnsureCreated();
+```
+
+Создаваемые таблицы:
+
+- events
+- bookings
+
+Связь между таблицами:
+
+```text
+Booking.EventId -> Event.Id
+```
+
+---
 
 ## Потокобезопасность
 
-В проекте реализована защита от овербукинга при конкурентных запросах.
-
-### BookingService
-
-Для защиты критической секции используется:
+Для защиты от овербукинга используется:
 
 ```csharp
-lock (_bookingLock)
+private static readonly SemaphoreSlim BookingSemaphore = new(1, 1);
+```
+
+Это гарантирует корректную обработку конкурентных запросов на бронирование и предотвращает резервирование большего количества мест, чем доступно в мероприятии.
+
+---
+
+## Запуск PostgreSQL
+
+Запуск контейнера:
+
+```bash
+docker compose up -d
+```
+
+Проверка контейнеров:
+
+```bash
+docker ps
+```
+
+Пример строки подключения:
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5432;Database=ebooking;Username=postgres;Password=postgres"
+  }
+}
+```
 
 ---
 
@@ -97,17 +175,23 @@ lock (_bookingLock)
 ### 1. Клонирование репозитория
 
 ```bash
-git clone <repo_url>
+git clone <repository_url>
 cd event-dot-booking
 ```
 
-### 2. Сборка проекта
+### 2. Запуск PostgreSQL
+
+```bash
+docker compose up -d
+```
+
+### 3. Сборка проекта
 
 ```bash
 dotnet build
 ```
 
-### 3. Запуск
+### 4. Запуск приложения
 
 ```bash
 dotnet run --project EBooking
@@ -119,176 +203,157 @@ dotnet run --project EBooking
 
 После запуска приложение будет доступно по адресу:
 
-```
+```text
 http://localhost:5000/swagger
 ```
 
-## Tests
+---
 
-Для запуска unit-тестов выполните команду:
+## Тестирование
 
-```
+Запуск тестов:
+
+```bash
 dotnet test
 ```
 
+Тесты используют EF Core InMemory Provider.
+
+Покрываются следующие сценарии:
+
+- CRUD-операции мероприятий
+- Создание бронирований
+- Валидация бизнес-правил
+- Ограничение количества мест
+- Защита от овербукинга
+- Конкурентные запросы
+
 ---
 
-## API эндпоинты
+## API Эндпоинты
 
-### 🔹 Получить все события
+### Получить список мероприятий
 
-```
+```http
 GET /events
 ```
 
-Поддерживаемые query-параметры:
+Параметры:
 
-* title — поиск по названию, частичное совпадение, без учёта регистра;
-* from — вернуть события, начинающиеся не раньше указанной даты;
-* to — вернуть события, заканчивающиеся не позже указанной даты;
-* page — номер страницы, по умолчанию 1;
-* pageSize — размер страницы, по умолчанию 10.
+- title
+- from
+- to
+- page
+- pageSize
 
-```
-GET /api/events?title=asp.net&from=2026-04-01T00:00:00&to=2026-04-30T23:59:59&page=1&pageSize=5
-```
+### Получить мероприятие по идентификатору
 
-Пример ответа:
-
-```json
-{
-  "status": true,
-  "dateTime": "2026-04-11T10:30:00Z",
-  "message": "Events returned successfully",
-  "data": {
-    "totalCount": 2,
-    "page": 1,
-    "pageSize": 5,
-    "items": [
-      {
-        "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-        "title": "ASP.NET Basic",
-        "description": "Introduction to ASP.NET Core",
-        "startAt": "2026-04-10T10:00:00",
-        "endAt": "2026-04-10T12:00:00"
-      },
-      {
-        "id": "3fa85f64-5717-4562-b3fc-2c963f66afa7",
-        "title": "ASP.NET Advanced",
-        "description": "Advanced topics",
-        "startAt": "2026-04-20T10:00:00",
-        "endAt": "2026-04-20T12:00:00"
-      }
-    ]
-  }
-}
-```
-
----
-
-### 🔹 Получить событие по ID
-
-```
+```http
 GET /events/{id}
 ```
 
-**Ответ:**
+### Создать мероприятие
 
-* 200 OK — если найдено
-* 404 Not Found — если нет
-
----
-
-### 🔹 Создать событие
-
-```
+```http
 POST /events
 ```
 
-**Body:**
+Пример тела запроса:
 
 ```json
 {
-  "title": "Event name",
-  "description": "Optional",
-  "startAt": "2026-03-25T10:00:00",
-  "endAt": "2026-03-25T12:00:00",
+  "title": "ASP.NET Meetup",
+  "description": "Introduction to ASP.NET Core",
+  "startAt": "2026-04-10T10:00:00",
+  "endAt": "2026-04-10T12:00:00",
   "totalSeats": 100
 }
 ```
 
-**Ответ:**
+### Обновить мероприятие
 
-* 201 Created — успешно
-* 400 Bad Request — ошибка валидации
-
----
-
-### 🔹 Обновить событие
-
-```
+```http
 PUT /events/{id}
 ```
 
----
+### Удалить мероприятие
 
-### 🔹 Удалить событие
-
-```
+```http
 DELETE /events/{id}
 ```
 
-### 🔹 Создать бронь
+### Создать бронирование
 
-```
+```http
 POST /events/{id}/book
 ```
 
-Возвращает 202 Accepted. Обработка выполняется асинхронно
-В заголовке Location возвращается ссылка на бронь
-Ответ
-{
-  "status": true,
-  "message": "Booking created successfully",
-  "data": {
-    "id": "guid",
-    "eventId": "guid",
-    "status": "Pending",
-    "createdAt": "2026-04-10T10:00:00Z",
-    "processedAt": null
-  }
-}
+Возвращает:
 
-
-### 🔹 Получить бронь
-
+```text
+202 Accepted
 ```
+
+Начальный статус бронирования:
+
+```text
+Pending
+```
+
+### Получить бронирование
+
+```http
 GET /bookings/{id}
 ```
 
-## Фоновая обработка
-
-В проекте реализован BackgroundService, который:
-
-* Периодически ищет брони со статусом `Pending`
-* Имитирует обращение к внешней системе (`Task.Delay`)
-* Переводит бронь в `Confirmed`
-* Заполняет поле `ProcessedAt`
-
 ---
 
-## Ограничения
+## Фоновая обработка бронирований
 
-* Данные не сохраняются между перезапусками
-* Нет авторизации
+После создания бронирование получает статус:
+
+```text
+Pending
+```
+
+Фоновый сервис BookingProcessingBackgroundService периодически проверяет необработанные бронирования и переводит их в:
+
+```text
+Confirmed
+```
+
+или
+
+```text
+Rejected
+```
+
+Для корректной работы со scoped-зависимостями используется IServiceScopeFactory.
+
+Каждая операция обработки выполняется в собственном DI Scope и использует собственный экземпляр AppDbContext.
+
+---
 
 ## Пример защиты от овербукинга
 
 Событие:
-* TotalSeats = 3
 
-Запросы:
-* 3 первых POST /events/{id}/book -> 202 Accepted
-* 4-й запрос -> 409 Conflict
+```text
+TotalSeats = 3
+```
 
-Сервис гарантирует, что количество подтверждённых бронирований не превысит количество мест даже при параллельных запросах.
+Первые три запроса:
+
+```http
+POST /events/{id}/book
+```
+
+будут успешно обработаны.
+
+Следующий запрос вернёт:
+
+```text
+409 Conflict
+```
+
+Количество бронирований никогда не превысит количество доступных мест даже при параллельных запросах.

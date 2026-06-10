@@ -1,16 +1,24 @@
 namespace EBooking.Tests;
 
+using EBooking.DataStore;
 using EBooking.DTO;
 using EBooking.Exceptions;
 using EBooking.Services;
-using EBooking.DataStore;
-
+using Microsoft.EntityFrameworkCore;
 
 public class EventsServiceTests
 {
     private static EventsService CreateService()
     {
-        return new EventsService(new EventStore());
+        var dbName = Guid.NewGuid().ToString();
+
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(dbName)
+            .Options;
+
+        var context = new AppDbContext(options);
+
+        return new EventsService(context);
     }
 
     private static CreateEventDto CreateValidCreateDto(
@@ -45,12 +53,12 @@ public class EventsServiceTests
     }
 
     [Fact]
-    public void CreateEvent_ShouldCreateEvent()
+    public async Task CreateEvent_ShouldCreateEvent()
     {
         var service = CreateService();
         var dto = CreateValidCreateDto();
 
-        var result = service.CreateEvent(dto);
+        var result = await service.CreateEventAsync(dto);
 
         Assert.NotNull(result);
         Assert.NotEqual(Guid.Empty, result.Id);
@@ -58,20 +66,22 @@ public class EventsServiceTests
         Assert.Equal(dto.Description, result.Description);
         Assert.Equal(dto.StartAt, result.StartAt);
         Assert.Equal(dto.EndAt, result.EndAt);
+        Assert.Equal(10, result.TotalSeats);
+        Assert.Equal(10, result.AvailableSeats);
     }
 
     [Fact]
-    public void GetEvents_ShouldReturnCreatedEvents()
+    public async Task GetEvents_ShouldReturnCreatedEvents()
     {
         var service = CreateService();
 
-        service.CreateEvent(CreateValidCreateDto(title: "Event 1"));
-        service.CreateEvent(CreateValidCreateDto(
+        await service.CreateEventAsync(CreateValidCreateDto(title: "Event 1"));
+        await service.CreateEventAsync(CreateValidCreateDto(
             title: "Event 2",
             startAt: new DateTime(2026, 4, 11, 10, 0, 0),
             endAt: new DateTime(2026, 4, 11, 12, 0, 0)));
 
-        var result = service.GetEvents(new GetEventsQueryDto());
+        var result = await service.GetEventsAsync(new GetEventsQueryDto());
 
         Assert.Equal(2, result.TotalCount);
         Assert.Equal(1, result.Page);
@@ -80,33 +90,34 @@ public class EventsServiceTests
     }
 
     [Fact]
-    public void GetEventById_ShouldReturnEvent_WhenEventExists()
+    public async Task GetEventById_ShouldReturnEvent_WhenEventExists()
     {
         var service = CreateService();
-        var created = service.CreateEvent(CreateValidCreateDto(title: "My Event"));
+        var created = await service.CreateEventAsync(CreateValidCreateDto(title: "My Event"));
 
-        var result = service.GetEventById(created.Id);
+        var result = await service.GetEventByIdAsync(created.Id);
 
         Assert.Equal(created.Id, result.Id);
         Assert.Equal("My Event", result.Title);
     }
 
     [Fact]
-    public void GetEventById_ShouldThrowNotFoundException_WhenEventDoesNotExist()
+    public async Task GetEventById_ShouldThrowNotFoundException_WhenEventDoesNotExist()
     {
         var service = CreateService();
-
         var missingId = Guid.NewGuid();
-        var action = () => service.GetEventById(missingId);
-        var exception = Assert.Throws<NotFoundException>(action);
+
+        var exception = await Assert.ThrowsAsync<NotFoundException>(
+            () => service.GetEventByIdAsync(missingId));
+
         Assert.Contains(missingId.ToString(), exception.Message);
     }
 
     [Fact]
-    public void UpdateEvent_ShouldUpdateEvent_WhenEventExists()
+    public async Task UpdateEvent_ShouldUpdateEvent_WhenEventExists()
     {
         var service = CreateService();
-        var created = service.CreateEvent(CreateValidCreateDto(title: "Old Title"));
+        var created = await service.CreateEventAsync(CreateValidCreateDto(title: "Old Title"));
 
         var updateDto = CreateValidUpdateDto(
             title: "New Title",
@@ -114,7 +125,7 @@ public class EventsServiceTests
             startAt: new DateTime(2026, 5, 1, 14, 0, 0),
             endAt: new DateTime(2026, 5, 1, 16, 0, 0));
 
-        var result = service.UpdateEvent(created.Id, updateDto);
+        var result = await service.UpdateEventAsync(created.Id, updateDto);
 
         Assert.NotNull(result);
         Assert.Equal(created.Id, result.Id);
@@ -125,57 +136,59 @@ public class EventsServiceTests
     }
 
     [Fact]
-    public void UpdateEvent_ShouldThrowNotFoundException_WhenEventDoesNotExist()
+    public async Task UpdateEvent_ShouldThrowNotFoundException_WhenEventDoesNotExist()
     {
         var service = CreateService();
         var updateDto = CreateValidUpdateDto();
-
         var missingId = Guid.NewGuid();
-        var action = () => service.UpdateEvent(missingId, updateDto);
-        var exception = Assert.Throws<NotFoundException>(action);
+
+        var exception = await Assert.ThrowsAsync<NotFoundException>(
+            () => service.UpdateEventAsync(missingId, updateDto));
+
         Assert.Contains(missingId.ToString(), exception.Message);
     }
 
     [Fact]
-    public void DeleteEvent_ShouldDeleteEvent_WhenEventExists()
+    public async Task DeleteEvent_ShouldDeleteEvent_WhenEventExists()
     {
         var service = CreateService();
-        var created = service.CreateEvent(CreateValidCreateDto());
+        var created = await service.CreateEventAsync(CreateValidCreateDto());
 
-        service.DeleteEvent(created.Id);
-        var result = service.GetEvents(new GetEventsQueryDto());
+        await service.DeleteEventAsync(created.Id);
+        var result = await service.GetEventsAsync(new GetEventsQueryDto());
 
         Assert.Empty(result.Items);
         Assert.Equal(0, result.TotalCount);
     }
 
     [Fact]
-    public void DeleteEvent_ShouldThrowNotFoundException_WhenEventDoesNotExist()
+    public async Task DeleteEvent_ShouldThrowNotFoundException_WhenEventDoesNotExist()
     {
         var service = CreateService();
-
         var missingId = Guid.NewGuid();
-        var action = () => service.DeleteEvent(missingId);
-        var exception = Assert.Throws<NotFoundException>(action);
+
+        var exception = await Assert.ThrowsAsync<NotFoundException>(
+            () => service.DeleteEventAsync(missingId));
+
         Assert.Contains(missingId.ToString(), exception.Message);
     }
 
     [Fact]
-    public void GetEvents_ShouldFilterByTitle_CaseInsensitive()
+    public async Task GetEvents_ShouldFilterByTitle_CaseInsensitive()
     {
         var service = CreateService();
 
-        service.CreateEvent(CreateValidCreateDto(title: "ASP.NET Meetup"));
-        service.CreateEvent(CreateValidCreateDto(
+        await service.CreateEventAsync(CreateValidCreateDto(title: "ASP.NET Meetup"));
+        await service.CreateEventAsync(CreateValidCreateDto(
             title: "Python Workshop",
             startAt: new DateTime(2026, 4, 11, 10, 0, 0),
             endAt: new DateTime(2026, 4, 11, 12, 0, 0)));
-        service.CreateEvent(CreateValidCreateDto(
+        await service.CreateEventAsync(CreateValidCreateDto(
             title: "Advanced asp.net Core",
             startAt: new DateTime(2026, 4, 12, 10, 0, 0),
             endAt: new DateTime(2026, 4, 12, 12, 0, 0)));
 
-        var result = service.GetEvents(new GetEventsQueryDto
+        var result = await service.GetEventsAsync(new GetEventsQueryDto
         {
             Title = "asp.net"
         });
@@ -187,20 +200,20 @@ public class EventsServiceTests
     }
 
     [Fact]
-    public void GetEvents_ShouldFilterByFrom()
+    public async Task GetEvents_ShouldFilterByFrom()
     {
         var service = CreateService();
 
-        service.CreateEvent(CreateValidCreateDto(
+        await service.CreateEventAsync(CreateValidCreateDto(
             title: "Before",
             startAt: new DateTime(2026, 4, 10, 10, 0, 0),
             endAt: new DateTime(2026, 4, 10, 12, 0, 0)));
-        service.CreateEvent(CreateValidCreateDto(
+        await service.CreateEventAsync(CreateValidCreateDto(
             title: "After",
             startAt: new DateTime(2026, 4, 15, 10, 0, 0),
             endAt: new DateTime(2026, 4, 15, 12, 0, 0)));
 
-        var result = service.GetEvents(new GetEventsQueryDto
+        var result = await service.GetEventsAsync(new GetEventsQueryDto
         {
             From = new DateTime(2026, 4, 12, 0, 0, 0)
         });
@@ -210,20 +223,20 @@ public class EventsServiceTests
     }
 
     [Fact]
-    public void GetEvents_ShouldFilterByTo()
+    public async Task GetEvents_ShouldFilterByTo()
     {
         var service = CreateService();
 
-        service.CreateEvent(CreateValidCreateDto(
+        await service.CreateEventAsync(CreateValidCreateDto(
             title: "Inside",
             startAt: new DateTime(2026, 4, 10, 10, 0, 0),
             endAt: new DateTime(2026, 4, 10, 12, 0, 0)));
-        service.CreateEvent(CreateValidCreateDto(
+        await service.CreateEventAsync(CreateValidCreateDto(
             title: "Outside",
             startAt: new DateTime(2026, 4, 20, 10, 0, 0),
             endAt: new DateTime(2026, 4, 20, 12, 0, 0)));
 
-        var result = service.GetEvents(new GetEventsQueryDto
+        var result = await service.GetEventsAsync(new GetEventsQueryDto
         {
             To = new DateTime(2026, 4, 15, 23, 59, 59)
         });
@@ -233,19 +246,19 @@ public class EventsServiceTests
     }
 
     [Fact]
-    public void GetEvents_ShouldApplyPagination()
+    public async Task GetEvents_ShouldApplyPagination()
     {
         var service = CreateService();
 
         for (int i = 1; i <= 5; i++)
         {
-            service.CreateEvent(CreateValidCreateDto(
+            await service.CreateEventAsync(CreateValidCreateDto(
                 title: $"Event {i}",
                 startAt: new DateTime(2026, 4, i, 10, 0, 0),
                 endAt: new DateTime(2026, 4, i, 12, 0, 0)));
         }
 
-        var result = service.GetEvents(new GetEventsQueryDto
+        var result = await service.GetEventsAsync(new GetEventsQueryDto
         {
             Page = 2,
             PageSize = 2
@@ -260,26 +273,26 @@ public class EventsServiceTests
     }
 
     [Fact]
-    public void GetEvents_ShouldApplyCombinedFilters()
+    public async Task GetEvents_ShouldApplyCombinedFilters()
     {
         var service = CreateService();
 
-        service.CreateEvent(CreateValidCreateDto(
+        await service.CreateEventAsync(CreateValidCreateDto(
             title: "ASP.NET Basic",
             startAt: new DateTime(2026, 4, 10, 10, 0, 0),
             endAt: new DateTime(2026, 4, 10, 12, 0, 0)));
 
-        service.CreateEvent(CreateValidCreateDto(
+        await service.CreateEventAsync(CreateValidCreateDto(
             title: "ASP.NET Advanced",
             startAt: new DateTime(2026, 4, 20, 10, 0, 0),
             endAt: new DateTime(2026, 4, 20, 12, 0, 0)));
 
-        service.CreateEvent(CreateValidCreateDto(
+        await service.CreateEventAsync(CreateValidCreateDto(
             title: "Python Advanced",
             startAt: new DateTime(2026, 4, 20, 10, 0, 0),
             endAt: new DateTime(2026, 4, 20, 12, 0, 0)));
 
-        var result = service.GetEvents(new GetEventsQueryDto
+        var result = await service.GetEventsAsync(new GetEventsQueryDto
         {
             Title = "asp.net",
             From = new DateTime(2026, 4, 15, 0, 0, 0),
@@ -294,37 +307,37 @@ public class EventsServiceTests
     }
 
     [Fact]
-    public void GetEvents_ShouldThrowValidationException_WhenPageIsInvalid()
+    public async Task GetEvents_ShouldThrowValidationException_WhenPageIsInvalid()
     {
         var service = CreateService();
 
-        var action = () => service.GetEvents(new GetEventsQueryDto
-        {
-            Page = 0,
-            PageSize = 10
-        });
+        var exception = await Assert.ThrowsAsync<ValidationException>(
+            () => service.GetEventsAsync(new GetEventsQueryDto
+            {
+                Page = 0,
+                PageSize = 10
+            }));
 
-        var exception = Assert.Throws<ValidationException>(action);
         Assert.Equal("Page must be greater than 0", exception.Message);
     }
 
     [Fact]
-    public void GetEvents_ShouldThrowValidationException_WhenPageSizeIsInvalid()
+    public async Task GetEvents_ShouldThrowValidationException_WhenPageSizeIsInvalid()
     {
         var service = CreateService();
 
-        var action = () => service.GetEvents(new GetEventsQueryDto
-        {
-            Page = 1,
-            PageSize = 0
-        });
+        var exception = await Assert.ThrowsAsync<ValidationException>(
+            () => service.GetEventsAsync(new GetEventsQueryDto
+            {
+                Page = 1,
+                PageSize = 0
+            }));
 
-        var exception = Assert.Throws<ValidationException>(action);
         Assert.Equal("PageSize must be greater than 0", exception.Message);
     }
 
     [Fact]
-    public void CreateEvent_ShouldThrowValidationException_WhenEndAtIsEarlierThanStartAt()
+    public async Task CreateEvent_ShouldThrowValidationException_WhenEndAtIsEarlierThanStartAt()
     {
         var service = CreateService();
 
@@ -332,25 +345,25 @@ public class EventsServiceTests
             startAt: new DateTime(2026, 4, 10, 12, 0, 0),
             endAt: new DateTime(2026, 4, 10, 10, 0, 0));
 
-        var action = () => service.CreateEvent(dto);
+        var exception = await Assert.ThrowsAsync<ValidationException>(
+            () => service.CreateEventAsync(dto));
 
-        var exception = Assert.Throws<ValidationException>(action);
         Assert.Equal("EndAt must be later than StartAt", exception.Message);
     }
 
     [Fact]
-    public void UpdateEvent_ShouldThrowValidationException_WhenEndAtIsEarlierThanStartAt()
+    public async Task UpdateEvent_ShouldThrowValidationException_WhenEndAtIsEarlierThanStartAt()
     {
         var service = CreateService();
-        var created = service.CreateEvent(CreateValidCreateDto());
+        var created = await service.CreateEventAsync(CreateValidCreateDto());
 
         var dto = CreateValidUpdateDto(
             startAt: new DateTime(2026, 4, 11, 12, 0, 0),
             endAt: new DateTime(2026, 4, 11, 11, 0, 0));
 
-        var action = () => service.UpdateEvent(created.Id, dto);
+        var exception = await Assert.ThrowsAsync<ValidationException>(
+            () => service.UpdateEventAsync(created.Id, dto));
 
-        var exception = Assert.Throws<ValidationException>(action);
         Assert.Equal("EndAt must be later than StartAt", exception.Message);
     }
 }

@@ -5,28 +5,24 @@ using EBooking.DTO;
 using EBooking.Exceptions;
 using EBooking.Interfaces;
 using EBooking.Models;
+using Microsoft.EntityFrameworkCore;
 
 /// <summary>
 /// Сервис для работы с мероприятиями
 /// </summary>
 public class EventsService : IEventsService
 {
-    private readonly EventStore _eventStore;
+    private readonly AppDbContext _context;
 
-    public EventsService(EventStore eventStore)
+    public EventsService(AppDbContext context)
     {
-        _eventStore = eventStore;
+        _context = context;
     }
 
     /// <summary>
     /// Получить список мероприятий с фильтрацией и пагинацией
     /// </summary>
-    /// <param name="query">Параметры фильтрации и пагинации</param>
-    /// <returns>Пагинированный список мероприятий</returns>
-    /// <exception cref="ValidationException">
-    /// Выбрасывается, если номер страницы или размер страницы некорректны
-    /// </exception>
-    public PaginatedResult<EventDto> GetEvents(GetEventsQueryDto query)
+    public async Task<PaginatedResult<EventDto>> GetEventsAsync(GetEventsQueryDto query)
     {
         if (query.Page <= 0)
         {
@@ -38,12 +34,14 @@ public class EventsService : IEventsService
             throw new ValidationException("PageSize must be greater than 0");
         }
 
-        IEnumerable<Event> filteredEvents = _eventStore.GetAll();
+        IQueryable<Event> filteredEvents = _context.Events.AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(query.Title))
         {
+            var title = query.Title.ToLower();
+
             filteredEvents = filteredEvents.Where(e =>
-                e.Title.Contains(query.Title, StringComparison.OrdinalIgnoreCase));
+                e.Title.ToLower().Contains(title));
         }
 
         if (query.From.HasValue)
@@ -56,14 +54,23 @@ public class EventsService : IEventsService
             filteredEvents = filteredEvents.Where(e => e.EndAt <= query.To.Value);
         }
 
-        var totalCount = filteredEvents.Count();
+        var totalCount = await filteredEvents.CountAsync();
 
-        var items = filteredEvents
+        var items = await filteredEvents
             .OrderBy(e => e.StartAt)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
-            .Select(ToDto)
-            .ToList();
+            .Select(e => new EventDto
+            {
+                Id = e.Id,
+                Title = e.Title,
+                Description = e.Description,
+                StartAt = e.StartAt,
+                EndAt = e.EndAt,
+                TotalSeats = e.TotalSeats,
+                AvailableSeats = e.AvailableSeats
+            })
+            .ToListAsync();
 
         return new PaginatedResult<EventDto>
         {
@@ -77,14 +84,11 @@ public class EventsService : IEventsService
     /// <summary>
     /// Получить мероприятие по идентификатору
     /// </summary>
-    /// <param name="id">Идентификатор мероприятия</param>
-    /// <returns>Найденное мероприятие</returns>
-    /// <exception cref="NotFoundException">
-    /// Выбрасывается, если мероприятие не найдено
-    /// </exception>
-    public EventDto GetEventById(Guid id)
+    public async Task<EventDto> GetEventByIdAsync(Guid id)
     {
-        var eventItem = _eventStore.GetById(id);
+        var eventItem = await _context.Events
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == id);
 
         if (eventItem is null)
         {
@@ -97,12 +101,7 @@ public class EventsService : IEventsService
     /// <summary>
     /// Создать новое мероприятие
     /// </summary>
-    /// <param name="eventData">Данные нового мероприятия</param>
-    /// <returns>Созданное мероприятие</returns>
-    /// <exception cref="ValidationException">
-    /// Выбрасывается, если дата окончания раньше или равна дате начала
-    /// </exception>
-    public EventDto CreateEvent(CreateEventDto eventData)
+    public async Task<EventDto> CreateEventAsync(CreateEventDto eventData)
     {
         ValidateEventDates(eventData.StartAt, eventData.EndAt);
 
@@ -119,7 +118,8 @@ public class EventsService : IEventsService
             eventData.TotalSeats.Value
         );
 
-        _eventStore.Add(newEvent);
+        await _context.Events.AddAsync(newEvent);
+        await _context.SaveChangesAsync();
 
         return ToDto(newEvent);
     }
@@ -127,20 +127,12 @@ public class EventsService : IEventsService
     /// <summary>
     /// Обновить существующее мероприятие
     /// </summary>
-    /// <param name="id">Идентификатор мероприятия</param>
-    /// <param name="eventData">Новые данные мероприятия</param>
-    /// <returns>Обновлённое мероприятие</returns>
-    /// <exception cref="NotFoundException">
-    /// Выбрасывается, если мероприятие не найдено
-    /// </exception>
-    /// <exception cref="ValidationException">
-    /// Выбрасывается, если дата окончания раньше или равна дате начала
-    /// </exception>
-    public EventDto UpdateEvent(Guid id, UpdateEventDto eventData)
+    public async Task<EventDto> UpdateEventAsync(Guid id, UpdateEventDto eventData)
     {
         ValidateEventDates(eventData.StartAt, eventData.EndAt);
 
-        var eventToUpdate = _eventStore.GetById(id);
+        var eventToUpdate = await _context.Events
+            .FirstOrDefaultAsync(e => e.Id == id);
 
         if (eventToUpdate is null)
         {
@@ -152,7 +144,7 @@ public class EventsService : IEventsService
         eventToUpdate.StartAt = eventData.StartAt;
         eventToUpdate.EndAt = eventData.EndAt;
 
-        _eventStore.Update(eventToUpdate);
+        await _context.SaveChangesAsync();
 
         return ToDto(eventToUpdate);
     }
@@ -160,27 +152,20 @@ public class EventsService : IEventsService
     /// <summary>
     /// Удалить мероприятие по идентификатору
     /// </summary>
-    /// <param name="id">Идентификатор мероприятия</param>
-    /// <exception cref="NotFoundException">
-    /// Выбрасывается, если мероприятие не найдено
-    /// </exception>
-    public void DeleteEvent(Guid id)
+    public async Task DeleteEventAsync(Guid id)
     {
-        var eventToRemove = _eventStore.GetById(id);
+        var eventToRemove = await _context.Events
+            .FirstOrDefaultAsync(e => e.Id == id);
 
         if (eventToRemove is null)
         {
             throw new NotFoundException($"Event with Id = {id} was not found");
         }
 
-        _eventStore.Delete(id);
+        _context.Events.Remove(eventToRemove);
+        await _context.SaveChangesAsync();
     }
 
-    /// <summary>
-    /// Преобразовать доменную модель в DTO ответа
-    /// </summary>
-    /// <param name="eventItem">Модель мероприятия</param>
-    /// <returns>DTO мероприятия</returns>
     private static EventDto ToDto(Event eventItem)
     {
         return new EventDto
@@ -195,14 +180,6 @@ public class EventsService : IEventsService
         };
     }
 
-    /// <summary>
-    /// Проверить корректность диапазона дат
-    /// </summary>
-    /// <param name="startAt">Дата начала</param>
-    /// <param name="endAt">Дата окончания</param>
-    /// <exception cref="ValidationException">
-    /// Выбрасывается, если дата окончания раньше или равна дате начала
-    /// </exception>
     private static void ValidateEventDates(DateTime startAt, DateTime endAt)
     {
         if (endAt <= startAt)

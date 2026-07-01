@@ -1,6 +1,6 @@
 namespace EBooking.IntegrationTests;
 
-using EBooking.DataStore;
+using EBooking.Infrastructure.DataStore;
 using Microsoft.EntityFrameworkCore;
 using Testcontainers.PostgreSql;
 

@@ -1,10 +1,10 @@
 namespace EBooking.Tests;
 
-using EBooking.DataStore;
-using EBooking.DTO;
-using EBooking.Exceptions;
-using EBooking.Services;
-using EBooking.Repositories;
+using EBooking.Infrastructure.DataStore;
+using EBooking.Application.DTO;
+using EBooking.Domain.Exceptions;
+using EBooking.Application.Services;
+using EBooking.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 
 public class EventsServiceTests

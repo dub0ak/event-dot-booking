@@ -1,8 +1,8 @@
 namespace EBooking.Controllers;
 
-using EBooking.DTO;
+using EBooking.Application.DTO;
 using EBooking.Handlers;
-using EBooking.Interfaces;
+using EBooking.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 /// <summary>

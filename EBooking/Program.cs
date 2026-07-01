@@ -1,24 +1,18 @@
 using System.Reflection;
 using EBooking.Handlers;
-using EBooking.Interfaces;
 using EBooking.Middleware;
-using EBooking.Services;
-using EBooking.DataStore;
+using EBooking.Infrastructure.DataStore;
 using EBooking.BackgroundServices;
-using EBooking.Repositories;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using EBooking.Application;
+using EBooking.Infrastructure;
 
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-builder.Services.AddScoped<IEventRepository, EventRepository>();
-builder.Services.AddScoped<IBookingRepository, BookingRepository>();
-builder.Services.AddScoped<IEventsService, EventsService>();
-builder.Services.AddScoped<IBookingService, BookingService>();
+builder.Services.AddApplicationServices();
+builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddHostedService<BookingProcessingBackgroundService>();
 builder.Services.AddControllers();
 

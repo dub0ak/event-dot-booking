@@ -1,7 +1,7 @@
 namespace EBooking.IntegrationTests;
 
-using EBooking.Models;
-using EBooking.Repositories;
+using EBooking.Domain.Entities;
+using EBooking.Infrastructure.Repositories;
 using Xunit;
 
 [Collection("Postgres collection")]

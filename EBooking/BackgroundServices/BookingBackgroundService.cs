@@ -1,7 +1,6 @@
-namespace EBooking.BackgroundServices;
+using EBooking.Application.Interfaces;
 
-using EBooking.Interfaces;
-using Microsoft.Extensions.DependencyInjection;
+namespace EBooking.BackgroundServices;
 
 public class BookingProcessingBackgroundService : BackgroundService
 {
@@ -18,59 +17,18 @@ public class BookingProcessingBackgroundService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _logger.LogInformation("Booking processing background service started.");
+
         while (!stoppingToken.IsCancellationRequested)
         {
             using var scope = _scopeFactory.CreateScope();
 
-            var bookingRepository = scope.ServiceProvider
-                .GetRequiredService<IBookingRepository>();
+            var bookingProcessingService =
+                scope.ServiceProvider.GetRequiredService<IBookingProcessingService>();
 
-            var eventRepository = scope.ServiceProvider
-                .GetRequiredService<IEventRepository>();
+            await bookingProcessingService.ProcessPendingBookingsAsync(stoppingToken);
 
-            var pendingBookingIds = await bookingRepository
-                .GetPendingBookingIdsAsync(stoppingToken);
-
-            foreach (var bookingId in pendingBookingIds)
-            {
-                var booking = await bookingRepository.GetByIdAsync(
-                    bookingId,
-                    stoppingToken,
-                    asNoTracking: false);
-
-                if (booking is null)
-                {
-                    continue;
-                }
-
-                var eventExists = await eventRepository.ExistsAsync(
-                    booking.EventId,
-                    stoppingToken);
-
-                if (!eventExists)
-                {
-                    booking.Reject();
-
-                    await bookingRepository.SaveChangesAsync(stoppingToken);
-
-                    _logger.LogWarning(
-                        "Booking {BookingId} was rejected because event {EventId} was not found",
-                        booking.Id,
-                        booking.EventId);
-
-                    continue;
-                }
-
-                booking.Confirm();
-
-                await bookingRepository.SaveChangesAsync(stoppingToken);
-
-                _logger.LogInformation(
-                    "Booking {BookingId} was confirmed",
-                    booking.Id);
-            }
-
-            await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+            await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
         }
     }
 }

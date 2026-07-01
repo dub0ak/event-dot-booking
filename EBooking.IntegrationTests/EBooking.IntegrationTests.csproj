@@ -21,7 +21,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\EBooking\EBooking.csproj" />
+    <ProjectReference Include="..\EBooking.Domain\EBooking.Domain.csproj" />
+    <ProjectReference Include="..\EBooking.Application\EBooking.Application.csproj" />
+    <ProjectReference Include="..\EBooking.Infrastructure\EBooking.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

@@ -306,6 +306,23 @@ dotnet run --project EBooking
 
 После этого защищённые эндпоинты будут выполняться от имени авторизованного пользователя.
 
+## Настройка JWT
+
+Параметры JWT находятся в секции `Jwt` файла `EBooking/appsettings.json`:
+
+```json
+{
+  "Jwt": {
+    "Secret": "development-secret-key",
+    "Issuer": "EBooking",
+    "Audience": "EBookingClient",
+    "LifetimeMinutes": 60
+  }
+}
+```
+
+Параметр Secret используется для подписи JWT-токенов. Значение из репозитория предназначено только для локальной разработки.
+
 ---
 
 ## Тестирование

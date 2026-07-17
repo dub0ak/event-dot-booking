@@ -69,7 +69,7 @@ public class EventsController(IEventsService eventsService, IBookingService book
     [Authorize(Roles = "Admin")]
     [HttpPost]
     [Produces("application/json")]
-    [ProducesResponseType(typeof(ApiResult<BookingDto>), StatusCodes.Status202Accepted)]
+    [ProducesResponseType(typeof(ApiResult<BookingDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]

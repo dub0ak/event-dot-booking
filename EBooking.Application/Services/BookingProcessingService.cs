@@ -1,4 +1,5 @@
 using EBooking.Application.Interfaces;
+using EBooking.Domain.Entities;
 
 namespace EBooking.Application.Services;
 
@@ -15,9 +16,12 @@ public class BookingProcessingService : IBookingProcessingService
         _eventRepository = eventRepository;
     }
 
-    public async Task ProcessPendingBookingsAsync(CancellationToken cancellationToken = default)
+    public async Task ProcessPendingBookingsAsync(
+        CancellationToken cancellationToken = default)
     {
-        var bookingIds = await _bookingRepository.GetPendingBookingIdsAsync(cancellationToken);
+        var bookingIds =
+            await _bookingRepository.GetPendingBookingIdsAsync(
+                cancellationToken);
 
         foreach (var bookingId in bookingIds)
         {
@@ -26,7 +30,8 @@ public class BookingProcessingService : IBookingProcessingService
                 cancellationToken,
                 asNoTracking: false);
 
-            if (booking is null || booking.Status != Domain.Entities.BookingStatus.Pending)
+            if (booking is null ||
+                booking.Status != BookingStatus.Pending)
             {
                 continue;
             }
@@ -39,20 +44,17 @@ public class BookingProcessingService : IBookingProcessingService
             if (eventEntity is null)
             {
                 booking.Reject();
-                await _bookingRepository.SaveChangesAsync(cancellationToken);
+
+                await _bookingRepository.SaveChangesAsync(
+                    cancellationToken);
+
                 continue;
             }
 
-            if (eventEntity.TryReserveSeats(1))
-            {
-                booking.Confirm();
-            }
-            else
-            {
-                booking.Reject();
-            }
+            booking.Confirm();
 
-            await _bookingRepository.SaveChangesAsync(cancellationToken);
+            await _bookingRepository.SaveChangesAsync(
+                cancellationToken);
         }
     }
 }

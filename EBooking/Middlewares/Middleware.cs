@@ -31,10 +31,30 @@ public class ExceptionHandlingMiddleware
             _logger.LogWarning(ex, "Resource not found");
             await WriteErrorAsync(context, StatusCodes.Status404NotFound, ex.Message);
         }
+        catch (InvalidCredentialsException ex)
+        {
+            _logger.LogWarning(ex, "Invalid Credentials");
+            await WriteErrorAsync(context, StatusCodes.Status404NotFound, ex.Message);
+        }
         catch (NoAvailableSeatsException ex)
         {
             _logger.LogWarning(ex, "No available seats");
             await WriteErrorAsync(context, StatusCodes.Status409Conflict, ex.Message);
+        }
+        catch (EventAlreadyStartedException ex)
+        {
+            _logger.LogWarning(ex, "Event already started");
+            await WriteErrorAsync(context, StatusCodes.Status400BadRequest, ex.Message);
+        }
+        catch (ActiveBookingLimitExceededException ex)
+        {
+            _logger.LogWarning(ex, "Active booking limit exceeded");
+            await WriteErrorAsync(context, StatusCodes.Status409Conflict, ex.Message);
+        }
+        catch (ForbiddenOperationException ex)
+        {
+            _logger.LogWarning(ex, "Forbidden operation");
+            await WriteErrorAsync(context, StatusCodes.Status403Forbidden, ex.Message);
         }
         catch (Exception ex)
         {

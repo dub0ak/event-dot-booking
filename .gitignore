@@ -55,3 +55,4 @@ nunit-*.xml
 
 # Custom
 rebuild.sh
+clear.sh

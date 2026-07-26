@@ -22,4 +22,10 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Services\Users\EBooking.Users.Domain\EBooking.Users.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\Users\EBooking.Users.Application\EBooking.Users.Application.csproj" />
+    <ProjectReference Include="..\..\..\src\Services\Users\EBooking.Users.Infrastructure\EBooking.Users.Infrastructure.csproj" />
+  </ItemGroup>
+
 </Project>

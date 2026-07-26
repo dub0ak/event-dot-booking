@@ -1,5 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <ItemGroup>
+    <ProjectReference Include="..\EBooking.Bookings.Application\EBooking.Bookings.Application.csproj" />
+    <ProjectReference Include="..\EBooking.Bookings.Domain\EBooking.Bookings.Domain.csproj" />
+    <ProjectReference Include="..\..\..\Blocks\EBooking.Contracts\EBooking.Contracts.csproj" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

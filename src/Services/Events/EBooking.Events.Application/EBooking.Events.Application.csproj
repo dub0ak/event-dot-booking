@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\Blocks\EBooking.Contracts\EBooking.Contracts.csproj" />
     <ProjectReference Include="..\EBooking.Events.Domain\EBooking.Events.Domain.csproj" />
   </ItemGroup>
 

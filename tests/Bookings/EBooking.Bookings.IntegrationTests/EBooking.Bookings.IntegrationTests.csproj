@@ -20,13 +20,14 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Services\Bookings\EBooking.Bookings.Domain\EBooking.Bookings.Domain.csproj" />
     <ProjectReference Include="..\..\..\src\Services\Bookings\EBooking.Bookings.Application\EBooking.Bookings.Application.csproj" />
     <ProjectReference Include="..\..\..\src\Services\Bookings\EBooking.Bookings.Infrastructure\EBooking.Bookings.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\..\src\Blocks\EBooking.Contracts\EBooking.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

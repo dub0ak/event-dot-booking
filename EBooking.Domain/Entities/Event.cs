@@ -86,7 +86,7 @@ public class Event
     {
         if (count <= 0)
         {
-            throw new ValidationException("Seat count must be greater than 0");
+            throw new ArgumentOutOfRangeException(nameof(count));
         }
 
         AvailableSeats = Math.Min(TotalSeats, AvailableSeats + count);

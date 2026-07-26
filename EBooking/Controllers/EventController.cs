@@ -4,6 +4,8 @@ using EBooking.Application.DTO;
 using EBooking.Handlers;
 using EBooking.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 /// <summary>
 /// Контроллер для работы с мероприятиями
@@ -64,9 +66,10 @@ public class EventsController(IEventsService eventsService, IBookingService book
     /// </summary>
     /// <param name="eventData">Данные нового мероприятия</param>
     /// <returns>Созданное мероприятие</returns>
+    [Authorize(Roles = "Admin")]
     [HttpPost]
     [Produces("application/json")]
-    [ProducesResponseType(typeof(ApiResult<BookingDto>), StatusCodes.Status202Accepted)]
+    [ProducesResponseType(typeof(ApiResult<BookingDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
@@ -91,6 +94,7 @@ public class EventsController(IEventsService eventsService, IBookingService book
     /// <param name="id">Идентификатор мероприятия</param>
     /// <param name="eventData">Новые данные мероприятия</param>
     /// <returns>Обновлённое мероприятие</returns>
+    [Authorize(Roles = "Admin")]
     [HttpPut("{id:guid}")]
     [Produces("application/json")]
     [ProducesResponseType(typeof(ApiResult<EventDto>), StatusCodes.Status200OK)]
@@ -113,6 +117,7 @@ public class EventsController(IEventsService eventsService, IBookingService book
     /// Удалить мероприятие
     /// </summary>
     /// <param name="id">Идентификатор мероприятия</param>
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
@@ -128,6 +133,7 @@ public class EventsController(IEventsService eventsService, IBookingService book
     /// </summary>
     /// <param name="id">Идентификатор мероприятия</param>
     /// <returns>Созданная бронь</returns>
+    [Authorize]
     [HttpPost("{id:guid}/book")]
     [Produces("application/json")]
     [ProducesResponseType(typeof(ApiResult<BookingDto>), StatusCodes.Status202Accepted)]
@@ -135,7 +141,14 @@ public class EventsController(IEventsService eventsService, IBookingService book
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<ApiResult<BookingDto>>> CreateBooking(Guid id)
     {
-        var booking = await _bookingService.CreateBookingAsync(id);
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!Guid.TryParse(userIdClaim, out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var booking = await _bookingService.CreateBookingAsync(id, userId);
         return Accepted(
             Url.Action(
                 nameof(BookingsController.GetBookingById),

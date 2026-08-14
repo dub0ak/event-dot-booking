@@ -658,4 +658,49 @@ public sealed class EventsServiceTests
             DefaultEndAt.AddDays(1)
         );
     }
+
+    [Fact]
+    public async Task GetTopEventsAsync_Should_Return_Cached_Result_Without_Calling_Repository()
+    {
+        var repository = new FakeEventRepository();
+        var cacheService = new FakeCacheService();
+        var eventItem = CreateEvent();
+        var cachedEvents = new[]
+        {
+            new EventDto(
+                eventItem.Id,
+                eventItem.Title,
+                eventItem.Description,
+                eventItem.StartAt,
+                eventItem.EndAt,
+                eventItem.TotalSeats,
+                eventItem.AvailableSeats)
+        };
+        cacheService.Seed(CacheKeys.TopEvents, cachedEvents);
+        var service = CreateService(repository, cacheService);
+        var result = await service.GetTopEventsAsync();
+        Assert.Single(result);
+        Assert.Equal(eventItem.Id, result.Single().Id);
+        Assert.Equal(1, cacheService.GetCallCount);
+        Assert.Equal(0, cacheService.SetCallCount);
+        Assert.Equal(0, repository.GetTopEventsCallCount);
+    }
+
+    [Fact]
+    public async Task GetTopEventsAsync_Should_Load_From_Repository_And_Cache_On_Miss()
+    {
+        var repository = new FakeEventRepository();
+        var cacheService = new FakeCacheService();
+        var eventItem = CreateEvent();
+        repository.GetTopEventsResult = new[] {eventItem};
+        var service = CreateService(repository, cacheService);
+        var result = await service.GetTopEventsAsync();
+        Assert.Single(result);
+        Assert.Equal(eventItem.Id, result.Single().Id);
+        Assert.Equal(1, repository.GetTopEventsCallCount);
+        Assert.Equal(1, cacheService.GetCallCount);
+        Assert.Equal(1, cacheService.SetCallCount);
+        Assert.Equal(CacheKeys.TopEvents, cacheService.LastKey);
+        Assert.Equal(TimeSpan.FromMinutes(5), cacheService.LastExpiration);
+    }
 }

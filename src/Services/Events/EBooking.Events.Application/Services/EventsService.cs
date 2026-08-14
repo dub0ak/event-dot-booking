@@ -132,10 +132,11 @@ public sealed class EventsService : IEventsService
             request.Title,
             request.Description,
             request.StartAt,
-            request.EndAt);
+            request.EndAt
+        );
 
-        await _eventRepository.SaveChangesAsync(
-            cancellationToken);
+        await _eventRepository.SaveChangesAsync(cancellationToken);
+        await _cacheService.RemoveAsync(CacheKeys.Event(id), cancellationToken);
 
         return ToDto(eventItem);
     }
@@ -156,12 +157,9 @@ public sealed class EventsService : IEventsService
             throw CreateNotFoundException(id);
         }
 
-        await _eventRepository.DeleteAsync(
-            eventItem,
-            cancellationToken);
-
-        await _eventRepository.SaveChangesAsync(
-            cancellationToken);
+        await _eventRepository.DeleteAsync(eventItem, cancellationToken);
+        await _eventRepository.SaveChangesAsync(cancellationToken);
+        await _cacheService.RemoveAsync(CacheKeys.Event(id), cancellationToken);
     }
 
     private static EventDto ToDto(Event eventItem)

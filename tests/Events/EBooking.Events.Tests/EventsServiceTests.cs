@@ -398,16 +398,17 @@ public sealed class EventsServiceTests
 
         repository.GetByIdResult = eventItem;
 
-        var service = CreateService(repository);
+        var cacheService = new FakeCacheService();
+        var service = CreateService(repository, cacheService);
 
-        using var cancellationTokenSource =
-            new CancellationTokenSource();
+        using var cancellationTokenSource = new CancellationTokenSource();
 
         var request = new UpdateEventRequest(
             "  New Title  ",
             "  New Description  ",
             DefaultStartAt.AddDays(1),
-            DefaultEndAt.AddDays(1));
+            DefaultEndAt.AddDays(1)
+        );
 
         var result = await service.UpdateEventAsync(
             eventItem.Id,
@@ -427,9 +428,12 @@ public sealed class EventsServiceTests
         Assert.False(repository.LastAsNoTracking);
         Assert.Equal(1, repository.GetByIdCallCount);
         Assert.Equal(1, repository.SaveChangesCallCount);
+        Assert.Equal(1, cacheService.RemoveCallCount);
+        Assert.Equal(CacheKeys.Event(eventItem.Id), cacheService.LastKey);
         Assert.Equal(
             cancellationTokenSource.Token,
-            repository.LastCancellationToken);
+            repository.LastCancellationToken
+        );
     }
 
     [Fact]
@@ -442,7 +446,8 @@ public sealed class EventsServiceTests
         var exception = await Assert.ThrowsAsync<NotFoundException>(
             () => service.UpdateEventAsync(
                 missingId,
-                CreateUpdateRequest()));
+                CreateUpdateRequest())
+            );
 
         Assert.Equal(
             $"Event with Id = {missingId} was not found.",
@@ -483,15 +488,12 @@ public sealed class EventsServiceTests
         var eventItem = CreateEvent();
 
         repository.Seed(eventItem);
+        var cacheService = new FakeCacheService();
+        var service = CreateService(repository, cacheService);
 
-        var service = CreateService(repository);
+        using var cancellationTokenSource = new CancellationTokenSource();
 
-        using var cancellationTokenSource =
-            new CancellationTokenSource();
-
-        await service.DeleteEventAsync(
-            eventItem.Id,
-            cancellationTokenSource.Token);
+        await service.DeleteEventAsync(eventItem.Id, cancellationTokenSource.Token);
 
         Assert.Equal(eventItem.Id, repository.LastRequestedId);
         Assert.False(repository.LastAsNoTracking);
@@ -499,13 +501,15 @@ public sealed class EventsServiceTests
         Assert.Equal(1, repository.GetByIdCallCount);
         Assert.Equal(1, repository.DeleteCallCount);
         Assert.Equal(1, repository.SaveChangesCallCount);
-
+        Assert.Equal(1, cacheService.RemoveCallCount);
+        Assert.Equal(CacheKeys.Event(eventItem.Id), cacheService.LastKey);
         Assert.Same(eventItem, repository.LastDeletedEvent);
         Assert.Empty(repository.Events);
 
         Assert.Equal(
             cancellationTokenSource.Token,
-            repository.LastCancellationToken);
+            repository.LastCancellationToken
+        );
     }
 
     [Fact]

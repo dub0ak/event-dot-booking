@@ -15,7 +15,33 @@ public sealed class EventsServiceTests
     public void Constructor_Should_Throw_When_Repository_Is_Null()
     {
         Assert.Throws<ArgumentNullException>(
-            () => new EventsService(null!));
+            () => new EventsService(
+                null!,
+                new FakeCacheService(),
+                new CacheOptions())
+            );
+    }
+
+    [Fact]
+    public void Constructor_Should_Throw_When_CacheService_Is_Null()
+    {
+        Assert.Throws<ArgumentNullException>(
+            () => new EventsService(
+                new FakeEventRepository(),
+                null!,
+                new CacheOptions())
+        );
+    }
+
+    [Fact]
+    public void Constructor_Should_Throw_When_CacheOptions_Is_Null()
+    {
+        Assert.Throws<ArgumentNullException>(
+            () => new EventsService(
+                new FakeEventRepository(),
+                new FakeCacheService(),
+                null!)
+        );
     }
 
     [Fact]
@@ -116,7 +142,7 @@ public sealed class EventsServiceTests
     public async Task GetEventsAsync_Should_Allow_To_Equal_From()
     {
         var repository = new FakeEventRepository();
-        var service = new EventsService(repository);
+        var service = CreateService(repository);
 
         var query = new GetEventsQuery
         {
@@ -133,7 +159,7 @@ public sealed class EventsServiceTests
     public async Task GetEventsAsync_Should_Pass_Query_And_Token_To_Repository()
     {
         var repository = new FakeEventRepository();
-        var service = new EventsService(repository);
+        var service = CreateService(repository);
 
         using var cancellationTokenSource =
             new CancellationTokenSource();
@@ -182,7 +208,7 @@ public sealed class EventsServiceTests
                 PageSize: 2,
                 Items: [firstEvent, secondEvent]);
 
-        var service = new EventsService(repository);
+        var service = CreateService(repository);
 
         var result = await service.GetEventsAsync(
             new GetEventsQuery
@@ -256,7 +282,7 @@ public sealed class EventsServiceTests
 
         repository.GetByIdResult = eventItem;
 
-        var service = new EventsService(repository);
+        var service = CreateService(repository);
 
         var result = await service.GetEventByIdAsync(eventItem.Id);
 
@@ -276,7 +302,7 @@ public sealed class EventsServiceTests
     public async Task GetEventByIdAsync_Should_Throw_When_Event_Does_Not_Exist()
     {
         var repository = new FakeEventRepository();
-        var service = new EventsService(repository);
+        var service = CreateService(repository);
         var missingId = Guid.NewGuid();
 
         var exception = await Assert.ThrowsAsync<NotFoundException>(
@@ -300,7 +326,7 @@ public sealed class EventsServiceTests
     public async Task CreateEventAsync_Should_Create_Add_And_Save_Event()
     {
         var repository = new FakeEventRepository();
-        var service = new EventsService(repository);
+        var service = CreateService(repository);
 
         using var cancellationTokenSource =
             new CancellationTokenSource();
@@ -337,7 +363,7 @@ public sealed class EventsServiceTests
     public async Task CreateEventAsync_Should_Not_Save_When_Domain_Validation_Fails()
     {
         var repository = new FakeEventRepository();
-        var service = new EventsService(repository);
+        var service = CreateService(repository);
 
         var request = new CreateEventRequest(
             " ",
@@ -372,7 +398,7 @@ public sealed class EventsServiceTests
 
         repository.GetByIdResult = eventItem;
 
-        var service = new EventsService(repository);
+        var service = CreateService(repository);
 
         using var cancellationTokenSource =
             new CancellationTokenSource();
@@ -410,7 +436,7 @@ public sealed class EventsServiceTests
     public async Task UpdateEventAsync_Should_Throw_When_Event_Does_Not_Exist()
     {
         var repository = new FakeEventRepository();
-        var service = new EventsService(repository);
+        var service = CreateService(repository);
         var missingId = Guid.NewGuid();
 
         var exception = await Assert.ThrowsAsync<NotFoundException>(
@@ -434,7 +460,7 @@ public sealed class EventsServiceTests
 
         repository.GetByIdResult = eventItem;
 
-        var service = new EventsService(repository);
+        var service = CreateService(repository);
 
         var request = new UpdateEventRequest(
             " ",
@@ -458,7 +484,7 @@ public sealed class EventsServiceTests
 
         repository.Seed(eventItem);
 
-        var service = new EventsService(repository);
+        var service = CreateService(repository);
 
         using var cancellationTokenSource =
             new CancellationTokenSource();
@@ -486,7 +512,7 @@ public sealed class EventsServiceTests
     public async Task DeleteEventAsync_Should_Throw_When_Event_Does_Not_Exist()
     {
         var repository = new FakeEventRepository();
-        var service = new EventsService(repository);
+        var service = CreateService(repository);
         var missingId = Guid.NewGuid();
 
         var exception = await Assert.ThrowsAsync<NotFoundException>(
@@ -501,10 +527,109 @@ public sealed class EventsServiceTests
         Assert.Equal(0, repository.SaveChangesCallCount);
     }
 
-    private static EventsService CreateService()
+    [Fact]
+    public async Task GetEventByIdAsync_Should_Return_Cached_Event_Without_Calling_Repository()
     {
+        var repository = new FakeEventRepository();
+        var cacheService = new FakeCacheService();
+        var eventItem = CreateEvent();
+
+        var cachedEvent = new EventDto(
+            eventItem.Id,
+            eventItem.Title,
+            eventItem.Description,
+            eventItem.StartAt,
+            eventItem.EndAt,
+            eventItem.TotalSeats,
+            eventItem.AvailableSeats);
+
+        cacheService.Seed(
+            CacheKeys.Event(eventItem.Id),
+            cachedEvent
+        );
+
+        var service = CreateService(
+            repository,
+            cacheService
+        );
+
+        var result = await service.GetEventByIdAsync(eventItem.Id);
+
+        Assert.Equal(cachedEvent, result);
+        Assert.Equal(1, cacheService.GetCallCount);
+        Assert.Equal(0, cacheService.SetCallCount);
+        Assert.Equal(0, repository.GetByIdCallCount);
+    }
+
+    [Fact]
+    public async Task GetEventByIdAsync_Should_Load_From_Repository_And_Cache_On_Miss()
+    {
+        var repository = new FakeEventRepository();
+        var cacheService = new FakeCacheService();
+        var eventItem = CreateEvent();
+
+        repository.GetByIdResult = eventItem;
+
+        var service = CreateService(
+            repository,
+            cacheService
+        );
+
+        var result = await service.GetEventByIdAsync(eventItem.Id);
+
+        Assert.Equal(eventItem.Id, result.Id);
+        Assert.Equal(eventItem.Title, result.Title);
+        Assert.Equal(eventItem.Description, result.Description);
+        Assert.Equal(eventItem.StartAt, result.StartAt);
+        Assert.Equal(eventItem.EndAt, result.EndAt);
+        Assert.Equal(eventItem.TotalSeats, result.TotalSeats);
+        Assert.Equal(eventItem.AvailableSeats, result.AvailableSeats);
+        Assert.Equal(1, cacheService.GetCallCount);
+        Assert.Equal(1, cacheService.SetCallCount);
+        Assert.Equal(CacheKeys.Event(eventItem.Id), cacheService.LastKey);
+        Assert.Equal(TimeSpan.FromMinutes(10), cacheService.LastExpiration);
+        Assert.Equal(1, repository.GetByIdCallCount);
+    }
+
+    [Fact]
+    public async Task GetEventByIdAsync_Should_Not_Cache_When_Event_Does_Not_Exist()
+    {
+        var repository = new FakeEventRepository();
+        var cacheService = new FakeCacheService();
+        var missingId = Guid.NewGuid();
+
+        var service = CreateService(
+            repository,
+            cacheService
+        );
+
+        await Assert.ThrowsAsync<NotFoundException>(
+            () => service.GetEventByIdAsync(missingId)
+        );
+
+        Assert.Equal(1, cacheService.GetCallCount);
+        Assert.Equal(0, cacheService.SetCallCount);
+        Assert.Equal(1, repository.GetByIdCallCount);
+    }
+
+    private static EventsService CreateService(
+        IEventRepository? repository = null,
+        FakeCacheService? cacheService = null,
+        CacheOptions? cacheOptions = null)
+    {
+        repository ??= new FakeEventRepository();
+        cacheService ??= new FakeCacheService();
+        cacheOptions ??= new CacheOptions
+        {
+            EventTtlMinutes = 10,
+            TopEventsTtlMinutes = 5
+        };
+
         return new EventsService(
-            new FakeEventRepository());
+            repository,
+            cacheService,
+            cacheOptions
+        );
     }
 
     private static Event CreateEvent(

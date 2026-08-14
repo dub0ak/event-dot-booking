@@ -2,6 +2,7 @@ namespace EBooking.Events.Application;
 
 using EBooking.Events.Domain;
 
+
 /// <summary>
 /// Реализует сценарии управления мероприятиями.
 /// </summary>
@@ -10,12 +11,20 @@ public sealed class EventsService : IEventsService
     private const int MaximumPageSize = 100;
 
     private readonly IEventRepository _eventRepository;
+    private readonly ICacheService _cacheService;
+    private readonly CacheOptions _cacheOptions;
 
-    public EventsService(IEventRepository eventRepository)
-    {
+    public EventsService(
+        IEventRepository eventRepository,
+        ICacheService cacheService,
+        CacheOptions cacheOptions) {
         ArgumentNullException.ThrowIfNull(eventRepository);
+        ArgumentNullException.ThrowIfNull(cacheService);
+        ArgumentNullException.ThrowIfNull(cacheOptions);
 
         _eventRepository = eventRepository;
+        _cacheService = cacheService;
+        _cacheOptions = cacheOptions;
     }
 
     public async Task<PaginatedResult<EventDto>> GetEventsAsync(
@@ -46,6 +55,17 @@ public sealed class EventsService : IEventsService
     {
         ValidateId(id);
 
+        var cacheKey = CacheKeys.Event(id);
+
+        var cachedEvent = await _cacheService.GetAsync<EventDto>(
+            cacheKey,
+            cancellationToken);
+
+        if (cachedEvent is not null)
+        {
+            return cachedEvent;
+        }
+
         var eventItem = await _eventRepository.GetByIdAsync(
             id,
             cancellationToken);
@@ -55,7 +75,16 @@ public sealed class EventsService : IEventsService
             throw CreateNotFoundException(id);
         }
 
-        return ToDto(eventItem);
+        var eventDto = ToDto(eventItem);
+
+        await _cacheService.SetAsync(
+            cacheKey,
+            eventDto,
+            TimeSpan.FromMinutes(_cacheOptions.EventTtlMinutes),
+            cancellationToken
+        );
+
+        return eventDto;
     }
 
     public async Task<EventDto> CreateEventAsync(

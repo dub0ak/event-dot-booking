@@ -71,6 +71,7 @@ public static class DependencyInjection
                 options => options.TopEventsTtlMinutes > 0,
                 "Top events cache TTL must be greater than zero."
             );
+        services.AddSingleton(serviceProvider => serviceProvider.GetRequiredService<IOptions<CacheOptions>>().Value);
         services.AddSingleton<IConnectionMultiplexer>(serviceProvider =>
         {
             var options = serviceProvider
@@ -84,9 +85,7 @@ public static class DependencyInjection
 
             return ConnectionMultiplexer.Connect(redisConfiguration);
         });
-
         services.AddSingleton<ICacheService, RedisCacheService>();
-
         return services;
     }
 }

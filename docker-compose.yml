@@ -81,6 +81,15 @@ services:
       timeout: 10s
       retries: 15
       start_period: 15s
+  
+  redis:
+    image: redis:7.2-alpine
+    container_name: eventapi-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   users-api:
     build:
@@ -104,6 +113,7 @@ services:
       ConnectionStrings__DefaultConnection: Host=events-db;Port=5432;Database=ebooking_events;Username=postgres;Password=postgres
       Kafka__BootstrapServers: kafka:29092
       Kafka__ConsumerGroup: ebooking-events-consumers
+      Redis__ConnectionString: redis:6379
     ports:
       - "5002:8080"
     depends_on:

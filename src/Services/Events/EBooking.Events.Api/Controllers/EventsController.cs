@@ -57,6 +57,18 @@ public sealed class EventsController : ControllerBase
         return Ok(eventItem);
     }
 
+    [HttpGet("top")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(IReadOnlyCollection<EventDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyCollection<EventDto>>> GetTopEvents(
+        CancellationToken cancellationToken)
+    {
+        var result = await _eventsService.GetTopEventsAsync(
+            cancellationToken);
+
+        return Ok(result);
+    }
+
     /// <summary>
     /// Создаёт мероприятие.
     /// </summary>

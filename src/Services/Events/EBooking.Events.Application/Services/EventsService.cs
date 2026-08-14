@@ -179,28 +179,24 @@ public sealed class EventsService : IEventsService
     {
         if (query.Page <= 0)
         {
-            throw new ValidationException(
-                "Page must be greater than 0.");
+            throw new ValidationException("Page must be greater than 0.");
         }
 
         if (query.PageSize <= 0)
         {
-            throw new ValidationException(
-                "PageSize must be greater than 0.");
+            throw new ValidationException("PageSize must be greater than 0.");
         }
 
         if (query.PageSize > MaximumPageSize)
         {
-            throw new ValidationException(
-                $"PageSize must not exceed {MaximumPageSize}.");
+            throw new ValidationException($"PageSize must not exceed {MaximumPageSize}.");
         }
 
         if (query.From.HasValue &&
             query.To.HasValue &&
             query.To.Value < query.From.Value)
         {
-            throw new ValidationException(
-                "To must be greater than or equal to From.");
+            throw new ValidationException("To must be greater than or equal to From.");
         }
     }
 
@@ -208,14 +204,39 @@ public sealed class EventsService : IEventsService
     {
         if (id == Guid.Empty)
         {
-            throw new ValidationException(
-                "Event Id cannot be empty.");
+            throw new ValidationException("Event Id cannot be empty.");
         }
     }
 
     private static NotFoundException CreateNotFoundException(Guid id)
     {
-        return new NotFoundException(
-            $"Event with Id = {id} was not found.");
+        return new NotFoundException($"Event with Id = {id} was not found.");
+    }
+
+    public async Task<IReadOnlyCollection<EventDto>> GetTopEventsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var cachedEvents =
+            await _cacheService.GetAsync<EventDto[]>(
+                CacheKeys.TopEvents,
+                cancellationToken
+            );
+
+        if (cachedEvents is not null)
+        {
+            return cachedEvents;
+        }
+
+        var events = await _eventRepository.GetTopEventsAsync(cancellationToken);
+        var result = events.Select(ToDto).ToArray();
+
+        await _cacheService.SetAsync(
+            CacheKeys.TopEvents,
+            result,
+            TimeSpan.FromMinutes(_cacheOptions.TopEventsTtlMinutes),
+            cancellationToken
+        );
+
+        return result;
     }
 }

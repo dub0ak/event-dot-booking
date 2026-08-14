@@ -119,4 +119,19 @@ public sealed class EventRepository : IEventRepository
     {
         return _context.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyCollection<Event>> GetTopEventsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.Events
+            .AsNoTracking()
+            .OrderByDescending(
+                eventItem =>
+                (double)(eventItem.TotalSeats - eventItem.AvailableSeats)
+                / eventItem.TotalSeats
+            )
+            .ThenBy(eventItem => eventItem.Id)
+            .Take(10)
+            .ToArrayAsync(cancellationToken);
+    }
 }

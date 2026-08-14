@@ -61,7 +61,16 @@ public static class DependencyInjection
                 options => !string.IsNullOrWhiteSpace(options.ConnectionString),
                 "Redis connection string is required."
             );
-
+        services
+            .AddOptions<CacheOptions>()
+            .Bind(configuration.GetSection(CacheOptions.SectionName))
+            .Validate(
+                options => options.EventTtlMinutes > 0,
+                "Event cache TTL must be greater than zero.")
+            .Validate(
+                options => options.TopEventsTtlMinutes > 0,
+                "Top events cache TTL must be greater than zero."
+            );
         services.AddSingleton<IConnectionMultiplexer>(serviceProvider =>
         {
             var options = serviceProvider

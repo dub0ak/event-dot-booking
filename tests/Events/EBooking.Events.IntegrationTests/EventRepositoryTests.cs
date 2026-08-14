@@ -726,4 +726,62 @@ public sealed class EventRepositoryTests
         Assert.Single(result.Items);
         Assert.Empty(context.ChangeTracker.Entries<Event>());
     }
+
+    [Fact]
+    public async Task GetTopEventsAsync_Should_Return_Ten_Events_Ordered_By_Sold_Percentage()
+    {
+        await _fixture.ResetDatabaseAsync();
+
+        var events = Enumerable.Range(1, 12)
+            .Select(index =>
+            {
+                var eventItem = CreateEvent(
+                    title: $"Event {index}",
+                    totalSeats: 100,
+                    startAt: DefaultStartAt.AddDays(index),
+                    endAt: DefaultEndAt.AddDays(index));
+
+                eventItem.TryReserveSeats(index * 5);
+
+                return eventItem;
+            })
+            .ToArray();
+
+        await SeedAsync(events);
+
+        await using var context = _fixture.CreateContext();
+        var repository = new EventRepository(context);
+        var result = await repository.GetTopEventsAsync();
+        Assert.Equal(10, result.Count);
+        var resultArray = result.ToArray();
+        Assert.Equal(events[11].Id, resultArray[0].Id);
+        Assert.Equal(events[10].Id, resultArray[1].Id);
+        Assert.Equal(events[9].Id, resultArray[2].Id);
+        Assert.DoesNotContain(result, eventItem => eventItem.Id == events[0].Id);
+        Assert.DoesNotContain(result, eventItem => eventItem.Id == events[1].Id);
+    }
+
+    [Fact]
+    public async Task GetTopEventsAsync_Should_Order_By_Sold_Percentage_Not_Sold_Count()
+    {
+        await _fixture.ResetDatabaseAsync();
+
+        var manySeats = CreateEvent(title: "Many Seats", totalSeats: 1000);
+        manySeats.TryReserveSeats(500);
+        var fewSeats = CreateEvent(
+            title: "Few Seats",
+            totalSeats: 10,
+            startAt: DefaultStartAt.AddDays(1),
+            endAt: DefaultEndAt.AddDays(1)
+        );
+        fewSeats.TryReserveSeats(9);
+        await SeedAsync(manySeats, fewSeats);
+        await using var context = _fixture.CreateContext();
+        var repository = new EventRepository(context);
+        var result = await repository.GetTopEventsAsync();
+        var resultArray = result.ToArray();
+        Assert.Equal(2, resultArray.Length);
+        Assert.Equal(fewSeats.Id, resultArray[0].Id);
+        Assert.Equal(manySeats.Id, resultArray[1].Id);
+    }
 }

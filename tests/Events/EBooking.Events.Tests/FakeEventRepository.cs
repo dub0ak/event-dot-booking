@@ -113,4 +113,16 @@ internal sealed class FakeEventRepository : IEventRepository
 
         return Task.CompletedTask;
     }
+
+    public IReadOnlyCollection<Event> GetTopEventsResult { get; set; } = Array.Empty<Event>();
+
+    public int GetTopEventsCallCount { get; private set; }
+
+    public Task<IReadOnlyCollection<Event>> GetTopEventsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        GetTopEventsCallCount++;
+        LastCancellationToken = cancellationToken;
+        return Task.FromResult(GetTopEventsResult);
+    }
 }

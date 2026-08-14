@@ -2,6 +2,7 @@ namespace EBooking.Events.Application;
 
 using EBooking.Events.Domain;
 
+
 /// <summary>
 /// Реализует сценарии управления мероприятиями.
 /// </summary>
@@ -10,12 +11,20 @@ public sealed class EventsService : IEventsService
     private const int MaximumPageSize = 100;
 
     private readonly IEventRepository _eventRepository;
+    private readonly ICacheService _cacheService;
+    private readonly CacheOptions _cacheOptions;
 
-    public EventsService(IEventRepository eventRepository)
-    {
+    public EventsService(
+        IEventRepository eventRepository,
+        ICacheService cacheService,
+        CacheOptions cacheOptions) {
         ArgumentNullException.ThrowIfNull(eventRepository);
+        ArgumentNullException.ThrowIfNull(cacheService);
+        ArgumentNullException.ThrowIfNull(cacheOptions);
 
         _eventRepository = eventRepository;
+        _cacheService = cacheService;
+        _cacheOptions = cacheOptions;
     }
 
     public async Task<PaginatedResult<EventDto>> GetEventsAsync(
@@ -46,6 +55,17 @@ public sealed class EventsService : IEventsService
     {
         ValidateId(id);
 
+        var cacheKey = CacheKeys.Event(id);
+
+        var cachedEvent = await _cacheService.GetAsync<EventDto>(
+            cacheKey,
+            cancellationToken);
+
+        if (cachedEvent is not null)
+        {
+            return cachedEvent;
+        }
+
         var eventItem = await _eventRepository.GetByIdAsync(
             id,
             cancellationToken);
@@ -55,7 +75,16 @@ public sealed class EventsService : IEventsService
             throw CreateNotFoundException(id);
         }
 
-        return ToDto(eventItem);
+        var eventDto = ToDto(eventItem);
+
+        await _cacheService.SetAsync(
+            cacheKey,
+            eventDto,
+            TimeSpan.FromMinutes(_cacheOptions.EventTtlMinutes),
+            cancellationToken
+        );
+
+        return eventDto;
     }
 
     public async Task<EventDto> CreateEventAsync(
@@ -103,10 +132,11 @@ public sealed class EventsService : IEventsService
             request.Title,
             request.Description,
             request.StartAt,
-            request.EndAt);
+            request.EndAt
+        );
 
-        await _eventRepository.SaveChangesAsync(
-            cancellationToken);
+        await _eventRepository.SaveChangesAsync(cancellationToken);
+        await _cacheService.RemoveAsync(CacheKeys.Event(id), cancellationToken);
 
         return ToDto(eventItem);
     }
@@ -127,12 +157,9 @@ public sealed class EventsService : IEventsService
             throw CreateNotFoundException(id);
         }
 
-        await _eventRepository.DeleteAsync(
-            eventItem,
-            cancellationToken);
-
-        await _eventRepository.SaveChangesAsync(
-            cancellationToken);
+        await _eventRepository.DeleteAsync(eventItem, cancellationToken);
+        await _eventRepository.SaveChangesAsync(cancellationToken);
+        await _cacheService.RemoveAsync(CacheKeys.Event(id), cancellationToken);
     }
 
     private static EventDto ToDto(Event eventItem)
@@ -152,28 +179,24 @@ public sealed class EventsService : IEventsService
     {
         if (query.Page <= 0)
         {
-            throw new ValidationException(
-                "Page must be greater than 0.");
+            throw new ValidationException("Page must be greater than 0.");
         }
 
         if (query.PageSize <= 0)
         {
-            throw new ValidationException(
-                "PageSize must be greater than 0.");
+            throw new ValidationException("PageSize must be greater than 0.");
         }
 
         if (query.PageSize > MaximumPageSize)
         {
-            throw new ValidationException(
-                $"PageSize must not exceed {MaximumPageSize}.");
+            throw new ValidationException($"PageSize must not exceed {MaximumPageSize}.");
         }
 
         if (query.From.HasValue &&
             query.To.HasValue &&
             query.To.Value < query.From.Value)
         {
-            throw new ValidationException(
-                "To must be greater than or equal to From.");
+            throw new ValidationException("To must be greater than or equal to From.");
         }
     }
 
@@ -181,14 +204,39 @@ public sealed class EventsService : IEventsService
     {
         if (id == Guid.Empty)
         {
-            throw new ValidationException(
-                "Event Id cannot be empty.");
+            throw new ValidationException("Event Id cannot be empty.");
         }
     }
 
     private static NotFoundException CreateNotFoundException(Guid id)
     {
-        return new NotFoundException(
-            $"Event with Id = {id} was not found.");
+        return new NotFoundException($"Event with Id = {id} was not found.");
+    }
+
+    public async Task<IReadOnlyCollection<EventDto>> GetTopEventsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var cachedEvents =
+            await _cacheService.GetAsync<EventDto[]>(
+                CacheKeys.TopEvents,
+                cancellationToken
+            );
+
+        if (cachedEvents is not null)
+        {
+            return cachedEvents;
+        }
+
+        var events = await _eventRepository.GetTopEventsAsync(cancellationToken);
+        var result = events.Select(ToDto).ToArray();
+
+        await _cacheService.SetAsync(
+            CacheKeys.TopEvents,
+            result,
+            TimeSpan.FromMinutes(_cacheOptions.TopEventsTtlMinutes),
+            cancellationToken
+        );
+
+        return result;
     }
 }

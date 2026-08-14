@@ -8,13 +8,17 @@ using EBooking.Contracts;
 public sealed class BookingConfirmedHandler : IBookingConfirmedHandler
 {
     private readonly IEventRepository _eventRepository;
+    private readonly ICacheService _cacheService;
 
     public BookingConfirmedHandler(
-        IEventRepository eventRepository)
+        IEventRepository eventRepository,
+        ICacheService cacheService)
     {
         ArgumentNullException.ThrowIfNull(eventRepository);
+        ArgumentNullException.ThrowIfNull(cacheService);
 
         _eventRepository = eventRepository;
+        _cacheService = cacheService;
     }
 
     /// <inheritdoc />
@@ -39,8 +43,11 @@ public sealed class BookingConfirmedHandler : IBookingConfirmedHandler
             return BookingConfirmedHandlingResult.InsufficientSeats;
         }
 
-        await _eventRepository.SaveChangesAsync(
-            cancellationToken);
+        await _eventRepository.SaveChangesAsync(cancellationToken);
+        await _cacheService.RemoveAsync(
+            CacheKeys.Event(message.EventId),
+            cancellationToken
+        );
 
         return BookingConfirmedHandlingResult.Processed;
     }

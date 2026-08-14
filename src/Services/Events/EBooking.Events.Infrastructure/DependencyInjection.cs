@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using StackExchange.Redis;
 
 /// <summary>
 /// Регистрация компонентов инфраструктурного слоя.
@@ -52,6 +53,39 @@ public static class DependencyInjection
             });
         services.AddHostedService<KafkaTopicInitializer>();
         services.AddHostedService<BookingConfirmedConsumer>();
+
+        services
+            .AddOptions<RedisOptions>()
+            .Bind(configuration.GetSection(RedisOptions.SectionName))
+            .Validate(
+                options => !string.IsNullOrWhiteSpace(options.ConnectionString),
+                "Redis connection string is required."
+            );
+        services
+            .AddOptions<CacheOptions>()
+            .Bind(configuration.GetSection(CacheOptions.SectionName))
+            .Validate(
+                options => options.EventTtlMinutes > 0,
+                "Event cache TTL must be greater than zero.")
+            .Validate(
+                options => options.TopEventsTtlMinutes > 0,
+                "Top events cache TTL must be greater than zero."
+            );
+        services.AddSingleton(serviceProvider => serviceProvider.GetRequiredService<IOptions<CacheOptions>>().Value);
+        services.AddSingleton<IConnectionMultiplexer>(serviceProvider =>
+        {
+            var options = serviceProvider
+                .GetRequiredService<IOptions<RedisOptions>>()
+                .Value;
+
+            var redisConfiguration =
+                ConfigurationOptions.Parse(options.ConnectionString);
+
+            redisConfiguration.AbortOnConnectFail = false;
+
+            return ConnectionMultiplexer.Connect(redisConfiguration);
+        });
+        services.AddSingleton<ICacheService, RedisCacheService>();
         return services;
     }
 }

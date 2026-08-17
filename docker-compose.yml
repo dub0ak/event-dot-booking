@@ -16,6 +16,16 @@ x-api-environment: &api-environment
   Jwt__Audience: EBookingClient
 
 services:
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.56
+    container_name: eventapi-jaeger
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
   users-db:
     <<: *postgres
     environment:
@@ -98,6 +108,7 @@ services:
     environment:
       <<: *api-environment
       ConnectionStrings__DefaultConnection: Host=users-db;Port=5432;Database=ebooking_users;Username=postgres;Password=postgres
+      Otlp__Endpoint: http://jaeger:4317
     ports:
       - "5001:8080"
     depends_on:
@@ -114,6 +125,7 @@ services:
       Kafka__BootstrapServers: kafka:29092
       Kafka__ConsumerGroup: ebooking-events-consumers
       Redis__ConnectionString: redis:6379
+      Otlp__Endpoint: http://jaeger:4317
     ports:
       - "5002:8080"
     depends_on:
@@ -130,6 +142,7 @@ services:
       <<: *api-environment
       ConnectionStrings__DefaultConnection: Host=bookings-db;Port=5432;Database=ebooking_bookings;Username=postgres;Password=postgres
       Kafka__BootstrapServers: kafka:29092
+      Otlp__Endpoint: http://jaeger:4317
     ports:
       - "5003:8080"
     depends_on:

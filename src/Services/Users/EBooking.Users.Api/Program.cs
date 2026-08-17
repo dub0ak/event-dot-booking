@@ -132,7 +132,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapPrometheusScrapingEndpoint();
+app.MapPrometheusScrapingEndpoint(); // в 8 дотнете нет DisableHttpMetrics :(
 
 app.Run();
 

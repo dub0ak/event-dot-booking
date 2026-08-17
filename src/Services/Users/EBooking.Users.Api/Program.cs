@@ -9,7 +9,33 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.EntityFrameworkCore;
 
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+
+using Serilog;
+using Serilog.Formatting.Compact;
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, configuration) =>
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .WriteTo.Console(new CompactJsonFormatter()));
+
+var serviceName = builder.Configuration["OpenTelemetry:ServiceName"];
+
+if (string.IsNullOrWhiteSpace(serviceName))
+{
+    throw new InvalidOperationException("OpenTelemetry service name is not configured.");
+}
+
+var otlpEndpoint = builder.Configuration["Otlp:Endpoint"];
+
+if (string.IsNullOrWhiteSpace(otlpEndpoint))
+{
+    throw new InvalidOperationException("OTLP endpoint is not configured.");
+}
 
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
@@ -18,6 +44,23 @@ builder.Services.AddControllers().AddJsonOptions(options => {
 });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services
+    .AddOpenTelemetry()
+    .ConfigureResource(resource =>
+        resource.AddService(serviceName))
+    .WithTracing(tracing =>
+        tracing
+            .AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation()
+            .AddEntityFrameworkCoreInstrumentation()
+            .AddOtlpExporter(options =>
+                options.Endpoint = new Uri(otlpEndpoint)))
+    .WithMetrics(metrics =>
+        metrics
+            .AddAspNetCoreInstrumentation()
+            .AddRuntimeInstrumentation()
+            .AddPrometheusExporter());
 
 var jwtSection = builder.Configuration.GetSection(JwtOptions.SectionName);
 
@@ -89,6 +132,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapPrometheusScrapingEndpoint(); // в 8 дотнете нет DisableHttpMetrics :(
 
 app.Run();
 

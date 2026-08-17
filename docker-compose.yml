@@ -1,0 +1,178 @@
+x-postgres: &postgres
+  image: postgres:16-alpine
+  environment: &postgres-environment
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U postgres"]
+    interval: 5s
+    timeout: 5s
+    retries: 10
+
+x-api-environment: &api-environment
+  ASPNETCORE_ENVIRONMENT: Development
+  Jwt__Secret: ETO-MY-SECRET-KEY-FOR-EBOOKING-PROJECT-PRACTICUM-HELLO-I-NEED-MORE-THAN-32-CHARS
+  Jwt__Issuer: EBooking
+  Jwt__Audience: EBookingClient
+
+services:
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: eventapi-prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.56
+    container_name: eventapi-jaeger
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: eventapi-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+  users-db:
+    <<: *postgres
+    environment:
+      <<: *postgres-environment
+      POSTGRES_DB: ebooking_users
+    volumes:
+      - users-db-data:/var/lib/postgresql/data
+
+  events-db:
+    <<: *postgres
+    environment:
+      <<: *postgres-environment
+      POSTGRES_DB: ebooking_events
+    volumes:
+      - events-db-data:/var/lib/postgresql/data
+
+  bookings-db:
+    <<: *postgres
+    environment:
+      <<: *postgres-environment
+      POSTGRES_DB: ebooking_bookings
+    volumes:
+      - bookings-db-data:/var/lib/postgresql/data
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test:
+        ["CMD-SHELL", "bash -c '</dev/tcp/localhost/2181'"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "kafka-topics --bootstrap-server localhost:29092 --list >/dev/null 2>&1"
+        ]
+      interval: 5s
+      timeout: 10s
+      retries: 15
+      start_period: 15s
+  
+  redis:
+    image: redis:7.2-alpine
+    container_name: eventapi-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  users-api:
+    build:
+      context: .
+      dockerfile: src/Services/Users/EBooking.Users.Api/Dockerfile
+    environment:
+      <<: *api-environment
+      ConnectionStrings__DefaultConnection: Host=users-db;Port=5432;Database=ebooking_users;Username=postgres;Password=postgres
+      Otlp__Endpoint: http://jaeger:4317
+    ports:
+      - "5001:8080"
+    depends_on:
+      users-db:
+        condition: service_healthy
+
+  events-api:
+    build:
+      context: .
+      dockerfile: src/Services/Events/EBooking.Events.Api/Dockerfile
+    environment:
+      <<: *api-environment
+      ConnectionStrings__DefaultConnection: Host=events-db;Port=5432;Database=ebooking_events;Username=postgres;Password=postgres
+      Kafka__BootstrapServers: kafka:29092
+      Kafka__ConsumerGroup: ebooking-events-consumers
+      Redis__ConnectionString: redis:6379
+      Otlp__Endpoint: http://jaeger:4317
+    ports:
+      - "5002:8080"
+    depends_on:
+      events-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  bookings-api:
+    build:
+      context: .
+      dockerfile: src/Services/Bookings/EBooking.Bookings.Api/Dockerfile
+    environment:
+      <<: *api-environment
+      ConnectionStrings__DefaultConnection: Host=bookings-db;Port=5432;Database=ebooking_bookings;Username=postgres;Password=postgres
+      Kafka__BootstrapServers: kafka:29092
+      Otlp__Endpoint: http://jaeger:4317
+    ports:
+      - "5003:8080"
+    depends_on:
+      bookings-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+volumes:
+  users-db-data:
+  events-db-data:
+  bookings-db-data:
+  grafana-data:

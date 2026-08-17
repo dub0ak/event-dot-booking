@@ -184,6 +184,15 @@ Events PostgreSQL
 - Repository Pattern
 - BackgroundService
 - Docker Compose
+- OpenTelemetry
+- Prometheus
+- Jaeger
+- Grafana
+- Serilog
+- Структурированное JSON-логирование
+- Distributed Tracing
+- Application Metrics
+- Grafana Provisioning
 - Многоступенчатые Dockerfile
 - Unit Tests
 - Integration Tests
@@ -214,6 +223,11 @@ Events PostgreSQL
 - Docker Compose
 - Testcontainers
 - xUnit
+- OpenTelemetry .NET
+- Prometheus
+- Jaeger
+- Grafana
+- Serilog
 
 ---
 
@@ -402,7 +416,17 @@ tests/
     ├── EBooking.Bookings.Tests/
     └── EBooking.Bookings.IntegrationTests/
 
+grafana/
+├── dashboards/
+│   └── ebooking-dashboard.json
+└── provisioning/
+    ├── dashboards/
+    │   └── dashboards.yml
+    └── datasources/
+        └── prometheus.yml
+
 docker-compose.yml
+prometheus.yml
 Directory.Packages.props
 EBooking.sln
 README.md
@@ -788,6 +812,170 @@ Jwt__Audience
 
 ---
 
+## Наблюдаемость
+
+Все три API-сервиса интегрированы с OpenTelemetry и предоставляют
+телеметрию для мониторинга и диагностики системы.
+
+Стек наблюдаемости включает:
+
+- OpenTelemetry — сбор метрик и распределённых трейсов;
+- Prometheus — сбор и хранение метрик;
+- Jaeger — хранение и визуализация трейсов;
+- Grafana — визуализация технических метрик;
+- Serilog — структурированное логирование в JSON.
+
+### OpenTelemetry
+
+OpenTelemetry SDK подключён к:
+
+- Users API;
+- Events API;
+- Bookings API.
+
+Для каждого сервиса настроена автоматическая инструментация:
+
+- входящих ASP.NET Core HTTP-запросов;
+- исходящих HTTP-запросов через HttpClient;
+- запросов Entity Framework Core к PostgreSQL;
+- метрик ASP.NET Core;
+- метрик .NET Runtime.
+
+Каждый сервис имеет отдельное имя OpenTelemetry resource:
+
+```text
+users-api
+events-api
+bookings-api
+```
+
+Это позволяет различать телеметрию сервисов в системах наблюдаемости.
+
+### Метрики
+
+Каждый API предоставляет Prometheus endpoint:
+
+```
+Users:    http://localhost:5001/metrics
+Events:   http://localhost:5002/metrics
+Bookings: http://localhost:5003/metrics
+```
+
+Prometheus автоматически собирает метрики со всех трёх сервисов.
+
+Конфигурация scrape targets находится в: `prometheus.yml`
+
+В Docker-сети используются адреса:
+
+```
+users-api:8080/metrics
+events-api:8080/metrics
+bookings-api:8080/metrics
+```
+
+Собираются в том числе:
+
+длительность HTTP-запросов;
+количество HTTP-запросов;
+количество активных HTTP-запросов;
+метрики .NET Runtime.
+
+Состояние targets можно проверить в Prometheus (`http://localhost:9090`).
+
+### Distributed Tracing
+
+Трейсы экспортируются из сервисов по протоколу OTLP в Jaeger. Порт 4317 используется для OTLP over gRPC.
+Jaeger UI доступен по адресу `http://localhost:16686`
+
+Трейсы HTTP-запросов содержат автоматически созданные спаны ASP.NET Core.
+
+Операции, обращающиеся к PostgreSQL через Entity Framework Core,
+также содержат отдельные database spans, что позволяет определить время,
+затраченное на выполнение запросов к базе данных.
+
+### Структурированное логирование
+
+Все API используют Serilog.
+
+Логи выводятся в стандартный поток контейнера в структурированном
+JSON-формате с использованием CompactJsonFormatter.
+
+### Grafana
+
+Grafana используется для визуализации метрик, собранных Prometheus. UI доступен по адресу `http://localhost:3000/`. Стандартные учетные данные: `admin:admin`.
+
+Prometheus подключён к Grafana как datasource. Dashboard EBooking содержит панели:
+
+```
+HTTP latency — p50, p95 и p99;
+Requests per second — throughput API;
+Active requests — количество одновременно обрабатываемых запросов;
+HTTP 5xx error rate — процент ответов с кодами 5xx.
+```
+
+Dashboard построен на метриках:
+
+```
+http_server_request_duration_seconds
+http_server_request_duration_seconds_count
+http_server_active_requests
+```
+
+Dashboard в текущей конфигурации отображает метрики users-api.
+
+### Grafana Provisioning
+
+Datasource Prometheus и dashboard EBooking создаются автоматически через механизм Grafana provisioning.
+
+Конфигурация находится в:
+
+```
+grafana/
+├── dashboards/
+│   └── ebooking-dashboard.json
+└── provisioning/
+    ├── dashboards/
+    │   └── dashboards.yml
+    └── datasources/
+        └── prometheus.yml
+```
+
+При запуске Grafana:
+
+- автоматически создаётся Prometheus datasource;
+- datasource подключается к http://prometheus:9090;
+- автоматически создаётся папка EBooking;
+- dashboard загружается из ebooking-dashboard.json.
+
+Ручная настройка datasource и импорт dashboard после запуска Docker Compose не требуются. Provisioning-файлы и JSON dashboard хранятся в репозитории вместе с исходным кодом.
+
+### Проверка стека наблюдаемости
+
+После запуска системы проверить Prometheus targets `http://localhost:9090`
+
+Все три target должны находиться в состоянии UP:
+
+```
+users-api
+events-api
+bookings-api
+```
+
+Выполнить несколько HTTP-запросов к API и открыть Jaeger `http://localhost:16686`.
+
+В Jaeger должны появиться трейсы соответствующих сервисов с HTTP-спанами и, для операций с базой данных, SQL/EF Core-спанами.
+
+Открыть Grafana `http://localhost:3000`. Dashboard: `EBooking / EBooking` должна быть создана автоматически через provisioning и отображать собранные Prometheus метрики. Для проверки provisioning с чистого состояния можно удалить Docker volumes и повторно запустить систему:
+
+```
+docker compose down -v
+docker compose up --build -d
+```
+
+После запуска datasource и dashboard Grafana будут восстановлены автоматически из файлов репозитория.
+
+---
+
 ## Docker Compose
 
 Вся система запускается одной командой:
@@ -807,6 +995,9 @@ Docker Compose поднимает:
 - ZooKeeper
 - Kafka
 - Redis
+- Prometheus
+- Jaeger
+- Grafana
 
 ### Порты
 
@@ -818,6 +1009,9 @@ Docker Compose поднимает:
 | Users Swagger | `http://localhost:5001/swagger` |
 | Events Swagger | `http://localhost:5002/swagger` |
 | Bookings Swagger | `http://localhost:5003/swagger` |
+| Prometheus | `http://localhost:9090` |
+| Jaeger | `http://localhost:16686` |
+| Grafana | `http://localhost:3000` |
 
 PostgreSQL, Kafka и ZooKeeper доступны только внутри Docker-сети и не публикуют порты на хост.
 
